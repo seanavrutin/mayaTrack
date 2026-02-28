@@ -37,7 +37,16 @@ function timeUntil(isoString) {
   return `עוד ${hrs} שע׳ ${remMins > 0 ? `ו-${remMins} דק׳` : ''}`;
 }
 
-export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, settings }) {
+export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, settings, loading }) {
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner" />
+        <p>טוען נתונים...</p>
+      </div>
+    );
+  }
+
   const lastFeeding = feedingEntries[0] ?? null;
   const lastPumping = pumpingEntries[0] ?? null;
   const lastPeeDiaper = diaperEntries.find((e) => e.pee) ?? null;

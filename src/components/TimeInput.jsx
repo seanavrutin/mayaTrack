@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 function padTwo(n) {
   return String(n).padStart(2, '0');
@@ -20,6 +20,11 @@ export default function TimeInput({ value, onChange }) {
   const [editingDate, setEditingDate] = useState(false);
   const timeRef = useRef(null);
   const dateRef = useRef(null);
+  const intervalRef = useRef(null);
+  const timeoutRef = useRef(null);
+  const repeatedRef = useRef(false);
+  const valueRef = useRef(value);
+  valueRef.current = value;
 
   const hours = value.getHours();
   const minutes = value.getMinutes();
@@ -34,11 +39,41 @@ export default function TimeInput({ value, onChange }) {
     if (editingDate && dateRef.current) dateRef.current.showPicker?.();
   }, [editingDate]);
 
+  const stopRepeat = useCallback(() => {
+    clearTimeout(timeoutRef.current);
+    clearInterval(intervalRef.current);
+    timeoutRef.current = null;
+    intervalRef.current = null;
+  }, []);
+
+  useEffect(() => stopRepeat, [stopRepeat]);
+
   const addMinutes = (delta) => {
-    const d = new Date(value);
+    const d = new Date(valueRef.current);
     d.setMinutes(d.getMinutes() + delta);
     onChange(d);
   };
+
+  const startRepeat = (delta) => {
+    repeatedRef.current = false;
+    stopRepeat();
+    timeoutRef.current = setTimeout(() => {
+      repeatedRef.current = true;
+      intervalRef.current = setInterval(() => addMinutes(delta), 80);
+    }, 400);
+  };
+
+  const handleClick = (delta) => {
+    if (repeatedRef.current) return;
+    addMinutes(delta);
+  };
+
+  const btnProps = (delta) => ({
+    onPointerDown: () => startRepeat(delta),
+    onPointerUp: stopRepeat,
+    onPointerLeave: stopRepeat,
+    onClick: () => handleClick(delta),
+  });
 
   const handleTimeChange = (e) => {
     const [h, m] = e.target.value.split(':').map(Number);
@@ -84,7 +119,7 @@ export default function TimeInput({ value, onChange }) {
       {/* Time row */}
       <label>🕐 שעה</label>
       <div className="stepper-controls">
-        <button type="button" onClick={() => addMinutes(-1)}>−</button>
+        <button type="button" {...btnProps(-1)}>−</button>
         {editingTime ? (
           <input
             ref={timeRef}
@@ -99,7 +134,7 @@ export default function TimeInput({ value, onChange }) {
             {timeStr}
           </span>
         )}
-        <button type="button" onClick={() => addMinutes(1)}>+</button>
+        <button type="button" {...btnProps(1)}>+</button>
       </div>
     </div>
   );

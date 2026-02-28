@@ -1,15 +1,43 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 export default function NumberStepper({ value, onChange, step = 1, min = 0, label, unit }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(String(value));
   const inputRef = useRef(null);
+  const intervalRef = useRef(null);
+  const timeoutRef = useRef(null);
+  const repeatedRef = useRef(false);
 
   useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.select();
     }
   }, [editing]);
+
+  const stopRepeat = useCallback(() => {
+    clearTimeout(timeoutRef.current);
+    clearInterval(intervalRef.current);
+    timeoutRef.current = null;
+    intervalRef.current = null;
+  }, []);
+
+  useEffect(() => stopRepeat, [stopRepeat]);
+
+  const startRepeat = (delta) => {
+    repeatedRef.current = false;
+    stopRepeat();
+    timeoutRef.current = setTimeout(() => {
+      repeatedRef.current = true;
+      intervalRef.current = setInterval(() => {
+        onChange((prev) => Math.max(min, prev + delta));
+      }, 80);
+    }, 400);
+  };
+
+  const handleClick = (delta) => {
+    if (repeatedRef.current) return;
+    onChange(Math.max(min, value + delta));
+  };
 
   const handleDoubleClick = () => {
     setEditValue(String(value));
@@ -29,11 +57,18 @@ export default function NumberStepper({ value, onChange, step = 1, min = 0, labe
     else if (e.key === 'Escape') setEditing(false);
   };
 
+  const btnProps = (delta) => ({
+    onPointerDown: () => startRepeat(delta),
+    onPointerUp: stopRepeat,
+    onPointerLeave: stopRepeat,
+    onClick: () => handleClick(delta),
+  });
+
   return (
     <div className="number-stepper">
       {label && <label>{label}</label>}
       <div className="stepper-controls">
-        <button type="button" onClick={() => onChange(Math.max(min, value - step))}>−</button>
+        <button type="button" {...btnProps(-step)}>−</button>
         {editing ? (
           <input
             ref={inputRef}
@@ -49,7 +84,7 @@ export default function NumberStepper({ value, onChange, step = 1, min = 0, labe
             {value}{unit ? ` ${unit}` : ''}
           </span>
         )}
-        <button type="button" onClick={() => onChange(value + step)}>+</button>
+        <button type="button" {...btnProps(step)}>+</button>
       </div>
     </div>
   );

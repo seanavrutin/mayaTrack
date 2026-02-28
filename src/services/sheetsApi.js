@@ -1,5 +1,5 @@
 const DEFAULT_URL =
-  'https://script.google.com/macros/s/AKfycbz3WK70SRyvrf6Xnir--UsSc6C5lyIEj_4v6HTZYpo6bTZbPhZXJ-9xLSexuS2Y69jZkw/exec';
+  'https://script.google.com/macros/s/AKfycbxrS8UBdBt8U4z3-QaR30rDp4z-VC2Mzm_RUsajIC8p1KbxWOGpgOqcth5RmJnhjNVIHA/exec';
 const URL_KEY = 'maya-script-url';
 
 function getUrl() {
@@ -32,14 +32,22 @@ export async function fetchAll() {
   });
 
   return {
-    feeding: (data.feeding || []).reverse(),
+    feeding: (data.feeding || []).reverse().map((e) => ({
+      ...e,
+      formula: Number(e.formula) || 0,
+      pumpedMilk: Number(e.pumpedMilk) || 0,
+      breastfeedingMinutes: Number(e.breastfeedingMinutes) || 0,
+    })),
     diaper: (data.diaper || []).reverse().map((e) => ({
       ...e,
       pee: toBool(e.pee),
       poop: toBool(e.poop),
       empty: toBool(e.empty),
     })),
-    pumping: (data.pumping || []).reverse(),
+    pumping: (data.pumping || []).reverse().map((e) => ({
+      ...e,
+      durationMinutes: Number(e.durationMinutes) || 0,
+    })),
     settings: {
       feedingIntervalMinutes: settingsObj.feedingIntervalMinutes || 180,
       pumpingIntervalMinutes: settingsObj.pumpingIntervalMinutes || 180,

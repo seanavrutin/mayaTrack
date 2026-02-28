@@ -23,8 +23,8 @@ function writeCache(data) {
 
 function App() {
   const [configured, setConfigured] = useState(isConfigured);
-  const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [initialSyncDone, setInitialSyncDone] = useState(!!readCache());
   const [activeTab, setActiveTab] = useState('form');
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
 
@@ -36,9 +36,8 @@ function App() {
     cached?.settings ?? { feedingIntervalMinutes: 180, pumpingIntervalMinutes: 180 },
   );
 
-  const syncFromSheet = useCallback(async (showLoading = false) => {
+  const syncFromSheet = useCallback(async () => {
     if (!isConfigured()) return;
-    if (showLoading) setLoading(true);
     setSyncing(true);
     try {
       const data = await fetchAll();
@@ -50,14 +49,14 @@ function App() {
     } catch (err) {
       console.error('Sync read error:', err);
     } finally {
-      setLoading(false);
       setSyncing(false);
+      setInitialSyncDone(true);
     }
   }, []);
 
   useEffect(() => {
-    if (!configured) { setLoading(false); return; }
-    syncFromSheet(true);
+    if (!configured) return;
+    syncFromSheet(false);
     const id = setInterval(() => syncFromSheet(false), SYNC_INTERVAL);
     return () => clearInterval(id);
   }, [configured, syncFromSheet]);
@@ -121,17 +120,6 @@ function App() {
     return <SetupScreen onReady={() => { setConfigured(true); }} />;
   }
 
-  /* ── Loading screen ── */
-
-  if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner" />
-        <p>טוען נתונים...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="app">
       <header className="app-header">
@@ -145,7 +133,7 @@ function App() {
         </nav>
         <h1>MayaTrack 👶</h1>
         <div className="header-left">
-          {syncing && <span className="sync-dot" title="מסנכרן..." />}
+          {syncing && <span className="sync-spinner" title="מסנכרן..." />}
           <button className="menu-btn" onClick={() => setSidePanelOpen(true)}>☰</button>
         </div>
       </header>
@@ -159,6 +147,7 @@ function App() {
             diaperEntries={diaperEntries}
             pumpingEntries={pumpingEntries}
             settings={settings}
+            loading={syncing && !initialSyncDone}
           />
         )}
       </main>

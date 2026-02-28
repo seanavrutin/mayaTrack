@@ -343,6 +343,32 @@ input {
   border-color: var(--primary-dark);
 }
 
+/* ── Quick Picks ── */
+
+.quick-picks {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.quick-pick {
+  padding: 8px 22px;
+  border-radius: var(--radius);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  font-weight: 700;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.quick-pick.selected {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary-dark);
+}
+
 /* ── Save Button ── */
 
 .save-btn {
@@ -752,20 +778,16 @@ input {
   gap: 8px;
 }
 
-/* ── Sync indicator ── */
+/* ── Sync spinner ── */
 
-.sync-dot {
-  width: 10px;
-  height: 10px;
+.sync-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
   border-radius: 50%;
-  background: #81d4fa;
   display: inline-block;
-  animation: pulse 1s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  animation: spin 0.7s linear infinite;
 }
 
 /* ── Loading screen ── */

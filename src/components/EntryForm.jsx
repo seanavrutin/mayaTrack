@@ -118,6 +118,10 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping }) {
       <div className="card">
         <div className="card-title">🧴 שאיבה</div>
         <NumberStepper label="זמן שאיבה (דקות)" value={pumpingMin} onChange={setPumpingMin} step={1} />
+        <div className="quick-picks">
+          <button type="button" className={`quick-pick ${pumpingMin === 15 ? 'selected' : ''}`} onClick={() => setPumpingMin(15)}>15</button>
+          <button type="button" className={`quick-pick ${pumpingMin === 35 ? 'selected' : ''}`} onClick={() => setPumpingMin(35)}>35</button>
+        </div>
         <button
           className={`save-btn ${savedSection === 'pumping' ? 'saved' : ''}`}
           onClick={handleSavePumping}

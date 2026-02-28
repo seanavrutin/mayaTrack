@@ -1,9 +1,16 @@
 // ==============================================================
 // קוד זה צריך להיות מועתק ל-Google Apps Script של הגיליון שלך.
-// ראה הוראות בקובץ SetupScreen.jsx או באפליקציה עצמה.
+// חשוב: הפעילו את Google Sheets API ב-Services (ראו הוראות למטה).
 // ==============================================================
 
-var SHEETS = {
+// ── הוראות הפעלת Sheets Advanced Service ──
+// 1. בעורך Apps Script, לחצו על "+" ליד "Services" בסרגל השמאלי
+// 2. חפשו "Google Sheets API" ולחצו Add
+// 3. זהו! עכשיו אפשר לפרוס מחדש
+
+var SHEET_NAMES = ['feeding', 'diaper', 'pumping', 'settings'];
+
+var HEADERS = {
   feeding: ['id', 'time', 'formula', 'pumpedMilk', 'breastfeedingMinutes'],
   diaper: ['id', 'time', 'pee', 'poop', 'empty'],
   pumping: ['id', 'time', 'durationMinutes'],
@@ -15,13 +22,15 @@ var DEFAULT_SETTINGS = [
   ['pumpingIntervalMinutes', 180]
 ];
 
+// Run once manually to create sheets (or call from doPost on first use)
 function setup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  for (var name in SHEETS) {
+  for (var i = 0; i < SHEET_NAMES.length; i++) {
+    var name = SHEET_NAMES[i];
     var sheet = ss.getSheetByName(name);
     if (!sheet) {
       sheet = ss.insertSheet(name);
-      sheet.appendRow(SHEETS[name]);
+      sheet.appendRow(HEADERS[name]);
       if (name === 'settings') {
         DEFAULT_SETTINGS.forEach(function (row) { sheet.appendRow(row); });
       }
@@ -30,17 +39,19 @@ function setup() {
 }
 
 function doGet() {
-  setup();
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var result = {};
+  var ssId = SpreadsheetApp.getActiveSpreadsheet().getId();
+  var ranges = SHEET_NAMES.map(function (n) { return n + '!A:Z'; });
+  var response = Sheets.Spreadsheets.Values.batchGet(ssId, { ranges: ranges });
 
-  for (var name in SHEETS) {
-    var sheet = ss.getSheetByName(name);
-    var data = sheet.getDataRange().getValues();
-    var headers = data[0];
-    result[name] = data.slice(1).map(function (row) {
+  var result = {};
+  for (var i = 0; i < SHEET_NAMES.length; i++) {
+    var name = SHEET_NAMES[i];
+    var values = response.valueRanges[i].values;
+    if (!values || values.length <= 1) { result[name] = []; continue; }
+    var headers = values[0];
+    result[name] = values.slice(1).map(function (row) {
       var obj = {};
-      headers.forEach(function (h, i) { obj[h] = row[i]; });
+      headers.forEach(function (h, j) { obj[h] = row[j] !== undefined ? row[j] : ''; });
       return obj;
     });
   }
@@ -50,7 +61,6 @@ function doGet() {
 }
 
 function doPost(e) {
-  setup();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var payload = JSON.parse(e.postData.contents);
 
