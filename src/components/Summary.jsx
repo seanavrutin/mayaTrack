@@ -37,7 +37,16 @@ function timeUntil(isoString) {
   return `עוד ${hrs} שע׳ ${remMins > 0 ? `ו-${remMins} דק׳` : ''}`;
 }
 
-export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, settings, loading }) {
+function isToday(isoString) {
+  if (!isoString) return false;
+  const d = new Date(isoString);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+}
+
+export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, vitaminDEntries = [], settings, loading }) {
   if (loading) {
     return (
       <div className="loading-screen">
@@ -51,6 +60,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
   const lastPumping = pumpingEntries[0] ?? null;
   const lastPeeDiaper = diaperEntries.find((e) => e.pee) ?? null;
   const lastPoopDiaper = diaperEntries.find((e) => e.poop) ?? null;
+  const vitaminDToday = vitaminDEntries.some((e) => isToday(e.time));
 
   const nextFeedingTime = lastFeeding
     ? addMinutesToISO(lastFeeding.time, settings.feedingIntervalMinutes)
@@ -140,6 +150,22 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
               <span className="summary-row-time">{formatTime(lastPoopDiaper?.time)}</span>
             </div>
             <span className="summary-row-ago">{timeAgo(lastPoopDiaper?.time)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Vitamin D card */}
+      <div className={`summary-card ${!vitaminDToday ? 'overdue' : ''}`}>
+        <div className="summary-card-icon">☀️</div>
+        <div className="summary-card-content">
+          <h3 className="summary-card-title">ויטמין D</h3>
+          <div className="summary-row">
+            <span className="summary-row-icon">{vitaminDToday ? '✅' : '❌'}</span>
+            <div className="summary-row-text">
+              <span className={`summary-row-label ${!vitaminDToday ? 'warning' : ''}`}>
+                {vitaminDToday ? 'קיבלה היום' : 'עדיין לא קיבלה היום'}
+              </span>
+            </div>
           </div>
         </div>
       </div>

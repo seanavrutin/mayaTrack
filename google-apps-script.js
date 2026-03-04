@@ -8,12 +8,13 @@
 // 2. חפשו "Google Sheets API" ולחצו Add
 // 3. זהו! עכשיו אפשר לפרוס מחדש
 
-var SHEET_NAMES = ['feeding', 'diaper', 'pumping', 'settings'];
+var SHEET_NAMES = ['feeding', 'diaper', 'pumping', 'vitaminD', 'settings'];
 
 var HEADERS = {
   feeding: ['id', 'time', 'formula', 'pumpedMilk', 'breastfeedingMinutes'],
   diaper: ['id', 'time', 'pee', 'poop', 'empty'],
   pumping: ['id', 'time', 'durationMinutes'],
+  vitaminD: ['id', 'time'],
   settings: ['key', 'value']
 };
 

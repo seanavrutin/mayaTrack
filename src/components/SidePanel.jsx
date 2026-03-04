@@ -14,6 +14,7 @@ const TABLE_TITLES = {
   feeding: '🍼 טבלת אוכל',
   diaper: '🚼 טבלת טיטול',
   pumping: '🧴 טבלת שאיבה',
+  vitaminD: '☀️ טבלת ויטמין D',
 };
 
 export default function SidePanel({
@@ -22,11 +23,13 @@ export default function SidePanel({
   feedingEntries,
   diaperEntries,
   pumpingEntries,
+  vitaminDEntries = [],
   settings,
   onSettingsChange,
   onDeleteFeeding,
   onDeleteDiaper,
   onDeletePumping,
+  onDeleteVitaminD,
 }) {
   const [activeTable, setActiveTable] = useState(null);
 
@@ -86,6 +89,9 @@ export default function SidePanel({
             </button>
             <button className="table-btn" onClick={() => setActiveTable('pumping')}>
               🧴 טבלת שאיבה
+            </button>
+            <button className="table-btn" onClick={() => setActiveTable('vitaminD')}>
+              ☀️ טבלת ויטמין D
             </button>
           </div>
         </div>
@@ -188,6 +194,33 @@ export default function SidePanel({
                           <td>{e.durationMinutes}׳</td>
                           <td>
                             <button className="delete-btn" onClick={() => onDeletePumping(e.id)}>✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+
+              {activeTable === 'vitaminD' && (
+                vitaminDEntries.length === 0 ? (
+                  <p className="no-data">אין נתונים עדיין</p>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>תאריך</th>
+                        <th>שעה</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vitaminDEntries.map((e) => (
+                        <tr key={e.id}>
+                          <td>{fmtDate(e.time)}</td>
+                          <td>{fmt(e.time)}</td>
+                          <td>
+                            <button className="delete-btn" onClick={() => onDeleteVitaminD(e.id)}>✕</button>
                           </td>
                         </tr>
                       ))}

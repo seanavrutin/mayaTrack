@@ -32,6 +32,7 @@ function App() {
   const [feedingEntries, setFeedingEntries] = useState(cached?.feeding ?? []);
   const [diaperEntries, setDiaperEntries] = useState(cached?.diaper ?? []);
   const [pumpingEntries, setPumpingEntries] = useState(cached?.pumping ?? []);
+  const [vitaminDEntries, setVitaminDEntries] = useState(cached?.vitaminD ?? []);
   const [settings, setSettings] = useState(
     cached?.settings ?? { feedingIntervalMinutes: 180, pumpingIntervalMinutes: 180 },
   );
@@ -44,6 +45,7 @@ function App() {
       setFeedingEntries(data.feeding);
       setDiaperEntries(data.diaper);
       setPumpingEntries(data.pumping);
+      setVitaminDEntries(data.vitaminD);
       setSettings(data.settings);
       writeCache(data);
     } catch (err) {
@@ -66,7 +68,7 @@ function App() {
   const addFeeding = (entry) => {
     setFeedingEntries((prev) => {
       const next = [entry, ...prev];
-      writeCache({ feeding: next, diaper: diaperEntries, pumping: pumpingEntries, settings });
+      writeCache({ feeding: next, diaper: diaperEntries, pumping: pumpingEntries, vitaminD: vitaminDEntries, settings });
       return next;
     });
     addEntry('feeding', entry).catch(console.error);
@@ -75,7 +77,7 @@ function App() {
   const addDiaper = (entry) => {
     setDiaperEntries((prev) => {
       const next = [entry, ...prev];
-      writeCache({ feeding: feedingEntries, diaper: next, pumping: pumpingEntries, settings });
+      writeCache({ feeding: feedingEntries, diaper: next, pumping: pumpingEntries, vitaminD: vitaminDEntries, settings });
       return next;
     });
     addEntry('diaper', entry).catch(console.error);
@@ -84,10 +86,19 @@ function App() {
   const addPumping = (entry) => {
     setPumpingEntries((prev) => {
       const next = [entry, ...prev];
-      writeCache({ feeding: feedingEntries, diaper: diaperEntries, pumping: next, settings });
+      writeCache({ feeding: feedingEntries, diaper: diaperEntries, pumping: next, vitaminD: vitaminDEntries, settings });
       return next;
     });
     addEntry('pumping', entry).catch(console.error);
+  };
+
+  const addVitaminD = (entry) => {
+    setVitaminDEntries((prev) => {
+      const next = [entry, ...prev];
+      writeCache({ feeding: feedingEntries, diaper: diaperEntries, pumping: pumpingEntries, vitaminD: next, settings });
+      return next;
+    });
+    addEntry('vitaminD', entry).catch(console.error);
   };
 
   const removeFeeding = (id) => {
@@ -103,6 +114,11 @@ function App() {
   const removePumping = (id) => {
     setPumpingEntries((prev) => prev.filter((e) => e.id !== id));
     deleteEntry('pumping', id).catch(console.error);
+  };
+
+  const removeVitaminD = (id) => {
+    setVitaminDEntries((prev) => prev.filter((e) => e.id !== id));
+    deleteEntry('vitaminD', id).catch(console.error);
   };
 
   const changeSettings = (newSettings) => {
@@ -140,12 +156,13 @@ function App() {
 
       <main className="app-main">
         {activeTab === 'form' ? (
-          <EntryForm onAddFeeding={addFeeding} onAddDiaper={addDiaper} onAddPumping={addPumping} />
+          <EntryForm onAddFeeding={addFeeding} onAddDiaper={addDiaper} onAddPumping={addPumping} onAddVitaminD={addVitaminD} />
         ) : (
           <Summary
             feedingEntries={feedingEntries}
             diaperEntries={diaperEntries}
             pumpingEntries={pumpingEntries}
+            vitaminDEntries={vitaminDEntries}
             settings={settings}
             loading={syncing && !initialSyncDone}
           />
@@ -158,11 +175,13 @@ function App() {
         feedingEntries={feedingEntries}
         diaperEntries={diaperEntries}
         pumpingEntries={pumpingEntries}
+        vitaminDEntries={vitaminDEntries}
         settings={settings}
         onSettingsChange={changeSettings}
         onDeleteFeeding={removeFeeding}
         onDeleteDiaper={removeDiaper}
         onDeletePumping={removePumping}
+        onDeleteVitaminD={removeVitaminD}
       />
     </div>
   );

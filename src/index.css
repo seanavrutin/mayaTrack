@@ -481,6 +481,11 @@ input {
   color: var(--text-muted);
 }
 
+.summary-row-label.warning {
+  color: var(--secondary);
+  font-weight: 600;
+}
+
 .summary-row-time {
   font-size: 1.15rem;
   font-weight: 700;

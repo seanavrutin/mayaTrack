@@ -6,7 +6,7 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
-export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping }) {
+export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onAddVitaminD }) {
   const [time, setTime] = useState(() => new Date());
   const [formula, setFormula] = useState(0);
   const [pumpedMilk, setPumpedMilk] = useState(0);
@@ -61,6 +61,14 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping }) {
     setPumpingMin(0);
     setTime(new Date());
     showSaved('pumping');
+  };
+
+  const handleSaveVitaminD = () => {
+    onAddVitaminD({
+      id: generateId(),
+      time: new Date().toISOString(),
+    });
+    showSaved('vitaminD');
   };
 
   return (
@@ -127,6 +135,16 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping }) {
           onClick={handleSavePumping}
         >
           {savedSection === 'pumping' ? '✓ נשמר!' : 'שמור שאיבה'}
+        </button>
+      </div>
+
+      <div className="card">
+        <div className="card-title">☀️ ויטמין D</div>
+        <button
+          className={`save-btn ${savedSection === 'vitaminD' ? 'saved' : ''}`}
+          onClick={handleSaveVitaminD}
+        >
+          {savedSection === 'vitaminD' ? '✓ נשמר!' : 'קיבלה ויטמין D'}
         </button>
       </div>
     </div>

@@ -48,6 +48,7 @@ export async function fetchAll() {
       ...e,
       durationMinutes: Number(e.durationMinutes) || 0,
     })),
+    vitaminD: (data.vitaminD || []).reverse(),
     settings: {
       feedingIntervalMinutes: settingsObj.feedingIntervalMinutes || 180,
       pumpingIntervalMinutes: settingsObj.pumpingIntervalMinutes || 180,
