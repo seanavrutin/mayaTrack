@@ -895,6 +895,108 @@ input {
   font-weight: 500;
 }
 
+/* ── Graph Buttons ── */
+
+.graph-btn {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: right;
+  transition: all 0.2s;
+  border: 2px solid var(--primary-light);
+}
+
+.graph-btn:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+/* ── Graph Modal ── */
+
+.graph-modal {
+  max-height: 85vh;
+}
+
+.graph-scroll-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  direction: ltr;
+  padding-bottom: 4px;
+}
+
+.graph-scroll-container::-webkit-scrollbar {
+  height: 4px;
+}
+
+.graph-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.graph-summary {
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+  padding: 12px 8px 4px;
+  white-space: pre-line;
+}
+
+.graph-legend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  padding: 10px 0 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.graph-tooltip {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+  direction: rtl;
+}
+
+.graph-tooltip-label {
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.graph-tooltip p {
+  margin: 2px 0;
+  color: var(--text);
+}
+
+/* ── Section headers in side panel ── */
+
+.table-buttons h3 {
+  font-size: 0.95rem;
+  color: var(--primary-dark);
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 480px) {

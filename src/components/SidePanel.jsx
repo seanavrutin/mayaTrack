@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import GraphModal from './GraphModal';
 
 function fmt(isoString) {
   const d = new Date(isoString);
@@ -32,6 +33,7 @@ export default function SidePanel({
   onDeleteVitaminD,
 }) {
   const [activeTable, setActiveTable] = useState(null);
+  const [activeGraph, setActiveGraph] = useState(null);
 
   const handleSetting = (key, value) => {
     const num = Number(value);
@@ -81,6 +83,7 @@ export default function SidePanel({
           </div>
 
           <div className="table-buttons">
+            <h3>📋 טבלאות</h3>
             <button className="table-btn" onClick={() => setActiveTable('feeding')}>
               🍼 טבלת אוכל
             </button>
@@ -94,8 +97,35 @@ export default function SidePanel({
               ☀️ טבלת ויטמין D
             </button>
           </div>
+
+          <div className="table-buttons">
+            <h3>📊 גרפים</h3>
+            <button className="graph-btn" onClick={() => setActiveGraph('pee')}>
+              💧 גרף פיפי
+            </button>
+            <button className="graph-btn" onClick={() => setActiveGraph('poop')}>
+              💩 גרף קקי
+            </button>
+            <button className="graph-btn" onClick={() => setActiveGraph('food')}>
+              🍼 גרף אוכל
+            </button>
+            <button className="graph-btn" onClick={() => setActiveGraph('pumping')}>
+              🧴 גרף שאיבה
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Graph popup modal */}
+      {activeGraph && (
+        <GraphModal
+          type={activeGraph}
+          diaperEntries={diaperEntries}
+          feedingEntries={feedingEntries}
+          pumpingEntries={pumpingEntries}
+          onClose={() => setActiveGraph(null)}
+        />
+      )}
 
       {/* Table popup modal */}
       {activeTable && (
