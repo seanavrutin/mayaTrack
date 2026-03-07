@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { isConfigured, fetchAll, addEntry, deleteEntry, updateSetting } from './services/sheetsApi';
 import EntryForm from './components/EntryForm';
 import Summary from './components/Summary';
 import SidePanel from './components/SidePanel';
 import SetupScreen from './components/SetupScreen';
+import useSwipe from './hooks/useSwipe';
 
 const SYNC_INTERVAL = 30_000;
 const CACHE_KEY = 'maya-cache';
@@ -130,6 +131,26 @@ function App() {
     });
   };
 
+  const [slideDir, setSlideDir] = useState(null);
+  const mainRef = useRef(null);
+
+  const switchTab = useCallback((tab, dir) => {
+    if (tab === activeTab) return;
+    setSlideDir(dir);
+    requestAnimationFrame(() => {
+      setActiveTab(tab);
+      const el = mainRef.current;
+      if (el) {
+        el.addEventListener('animationend', () => setSlideDir(null), { once: true });
+      }
+    });
+  }, [activeTab]);
+
+  const swipeHandlers = useSwipe(
+    () => switchTab('form', 'slide-right'),
+    () => switchTab('summary', 'slide-left'),
+  );
+
   /* ── Setup screen ── */
 
   if (!configured) {
@@ -140,10 +161,10 @@ function App() {
     <div className="app">
       <header className="app-header">
         <nav className="tabs">
-          <button className={activeTab === 'form' ? 'active' : ''} onClick={() => setActiveTab('form')}>
+          <button className={activeTab === 'form' ? 'active' : ''} onClick={() => switchTab('form', 'slide-right')}>
             טופס
           </button>
-          <button className={activeTab === 'summary' ? 'active' : ''} onClick={() => setActiveTab('summary')}>
+          <button className={activeTab === 'summary' ? 'active' : ''} onClick={() => switchTab('summary', 'slide-left')}>
             סיכום
           </button>
         </nav>
@@ -154,7 +175,11 @@ function App() {
         </div>
       </header>
 
-      <main className="app-main">
+      <main
+        className={`app-main${slideDir ? ` ${slideDir}` : ''}`}
+        ref={mainRef}
+        {...swipeHandlers}
+      >
         {activeTab === 'form' ? (
           <EntryForm onAddFeeding={addFeeding} onAddDiaper={addDiaper} onAddPumping={addPumping} onAddVitaminD={addVitaminD} />
         ) : (

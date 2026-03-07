@@ -119,6 +119,25 @@ input {
 .app-main {
   padding: 16px;
   padding-bottom: 40px;
+  overflow-x: hidden;
+}
+
+.app-main.slide-left {
+  animation: slideInFromLeft 0.25s ease-out;
+}
+
+.app-main.slide-right {
+  animation: slideInFromRight 0.25s ease-out;
+}
+
+@keyframes slideInFromLeft {
+  from { opacity: 0; transform: translateX(-30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInFromRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 /* ── Card ── */

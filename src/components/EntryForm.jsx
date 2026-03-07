@@ -80,8 +80,17 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
       <div className="card">
         <div className="card-title">🍼 אוכל</div>
         <NumberStepper label='כמות תמ"ל (מ"ל)' value={formula} onChange={setFormula} step={5} />
+        <div className="quick-picks">
+          <button type="button" className={`quick-pick ${formula === 60 ? 'selected' : ''}`} onClick={() => setFormula(60)}>60</button>
+        </div>
         <NumberStepper label='כמות חלב שאוב (מ"ל)' value={pumpedMilk} onChange={setPumpedMilk} step={5} />
+        <div className="quick-picks">
+          <button type="button" className={`quick-pick ${pumpedMilk === 60 ? 'selected' : ''}`} onClick={() => setPumpedMilk(60)}>60</button>
+        </div>
         <NumberStepper label="זמן הנקה (דקות)" value={breastfeedingMin} onChange={setBreastfeedingMin} step={1} />
+        <div className="quick-picks">
+          <button type="button" className={`quick-pick ${breastfeedingMin === 20 ? 'selected' : ''}`} onClick={() => setBreastfeedingMin(20)}>20</button>
+        </div>
         <button
           className={`save-btn ${savedSection === 'feeding' ? 'saved' : ''}`}
           onClick={handleSaveFeeding}
