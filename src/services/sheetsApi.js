@@ -57,12 +57,15 @@ export async function fetchAll() {
 }
 
 async function post(payload) {
-  await fetch(getUrl(), {
+  const res = await fetch(getUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(payload),
     redirect: 'follow',
   });
+  if (!res.ok) {
+    throw new Error(`Sheet write failed (${res.status})`);
+  }
 }
 
 export function addEntry(sheet, data) {

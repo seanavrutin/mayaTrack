@@ -64,63 +64,22 @@ function App() {
     return () => clearInterval(id);
   }, [configured, syncFromSheet]);
 
-  /* ── Write helpers: optimistic local update + background Sheet write ── */
+  /* ── Write helpers: write to Sheet then re-fetch ── */
 
-  const addFeeding = (entry) => {
-    setFeedingEntries((prev) => {
-      const next = [entry, ...prev];
-      writeCache({ feeding: next, diaper: diaperEntries, pumping: pumpingEntries, vitaminD: vitaminDEntries, settings });
-      return next;
-    });
-    addEntry('feeding', entry).catch(console.error);
+  const writeAndSync = async (apiFn) => {
+    await apiFn();
+    await syncFromSheet();
   };
 
-  const addDiaper = (entry) => {
-    setDiaperEntries((prev) => {
-      const next = [entry, ...prev];
-      writeCache({ feeding: feedingEntries, diaper: next, pumping: pumpingEntries, vitaminD: vitaminDEntries, settings });
-      return next;
-    });
-    addEntry('diaper', entry).catch(console.error);
-  };
+  const addFeeding = (entry) => writeAndSync(() => addEntry('feeding', entry));
+  const addDiaper = (entry) => writeAndSync(() => addEntry('diaper', entry));
+  const addPumping = (entry) => writeAndSync(() => addEntry('pumping', entry));
+  const addVitaminD = (entry) => writeAndSync(() => addEntry('vitaminD', entry));
 
-  const addPumping = (entry) => {
-    setPumpingEntries((prev) => {
-      const next = [entry, ...prev];
-      writeCache({ feeding: feedingEntries, diaper: diaperEntries, pumping: next, vitaminD: vitaminDEntries, settings });
-      return next;
-    });
-    addEntry('pumping', entry).catch(console.error);
-  };
-
-  const addVitaminD = (entry) => {
-    setVitaminDEntries((prev) => {
-      const next = [entry, ...prev];
-      writeCache({ feeding: feedingEntries, diaper: diaperEntries, pumping: pumpingEntries, vitaminD: next, settings });
-      return next;
-    });
-    addEntry('vitaminD', entry).catch(console.error);
-  };
-
-  const removeFeeding = (id) => {
-    setFeedingEntries((prev) => prev.filter((e) => e.id !== id));
-    deleteEntry('feeding', id).catch(console.error);
-  };
-
-  const removeDiaper = (id) => {
-    setDiaperEntries((prev) => prev.filter((e) => e.id !== id));
-    deleteEntry('diaper', id).catch(console.error);
-  };
-
-  const removePumping = (id) => {
-    setPumpingEntries((prev) => prev.filter((e) => e.id !== id));
-    deleteEntry('pumping', id).catch(console.error);
-  };
-
-  const removeVitaminD = (id) => {
-    setVitaminDEntries((prev) => prev.filter((e) => e.id !== id));
-    deleteEntry('vitaminD', id).catch(console.error);
-  };
+  const removeFeeding = (id) => writeAndSync(() => deleteEntry('feeding', id));
+  const removeDiaper = (id) => writeAndSync(() => deleteEntry('diaper', id));
+  const removePumping = (id) => writeAndSync(() => deleteEntry('pumping', id));
+  const removeVitaminD = (id) => writeAndSync(() => deleteEntry('vitaminD', id));
 
   const changeSettings = (newSettings) => {
     setSettings(newSettings);

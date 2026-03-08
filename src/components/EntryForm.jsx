@@ -1,9 +1,29 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import NumberStepper from './NumberStepper';
 import TimeInput from './TimeInput';
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// 'idle' | 'saving' | 'saved' | 'error'
+function useSaveStatus() {
+  const [statuses, setStatuses] = useState({});
+  const timers = useRef({});
+
+  const setStatus = useCallback((section, status) => {
+    setStatuses((prev) => ({ ...prev, [section]: status }));
+    clearTimeout(timers.current[section]);
+    if (status === 'saved') {
+      timers.current[section] = setTimeout(() => {
+        setStatuses((prev) => ({ ...prev, [section]: 'idle' }));
+      }, 2000);
+    }
+  }, []);
+
+  const getStatus = useCallback((section) => statuses[section] || 'idle', [statuses]);
+
+  return { setStatus, getStatus };
 }
 
 export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onAddVitaminD }) {
@@ -15,60 +35,79 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
   const [poop, setPoop] = useState(false);
   const [emptyDiaper, setEmptyDiaper] = useState(false);
   const [pumpingMin, setPumpingMin] = useState(0);
-  const [savedSection, setSavedSection] = useState(null);
 
-  const showSaved = (section) => {
-    setSavedSection(section);
-    setTimeout(() => setSavedSection(null), 1500);
+  const { setStatus, getStatus } = useSaveStatus();
+  const retryRef = useRef({});
+
+  const doSave = async (section, addFn, entry, resetFn) => {
+    if (getStatus(section) === 'saving') return;
+    setStatus(section, 'saving');
+    retryRef.current[section] = () => doSave(section, addFn, entry, null);
+    try {
+      await addFn(entry);
+      setStatus(section, 'saved');
+      retryRef.current[section] = null;
+      if (resetFn) resetFn();
+    } catch {
+      setStatus(section, 'error');
+    }
+  };
+
+  const handleRetry = (section) => {
+    const fn = retryRef.current[section];
+    if (fn) fn();
   };
 
   const handleSaveFeeding = () => {
-    onAddFeeding({
+    const entry = {
       id: generateId(),
       time: time.toISOString(),
       formula,
       pumpedMilk,
       breastfeedingMinutes: breastfeedingMin,
+    };
+    doSave('feeding', onAddFeeding, entry, () => {
+      setFormula(0);
+      setPumpedMilk(0);
+      setBreastfeedingMin(0);
+      setTime(new Date());
     });
-    setFormula(0);
-    setPumpedMilk(0);
-    setBreastfeedingMin(0);
-    setTime(new Date());
-    showSaved('feeding');
   };
 
   const handleSaveDiaper = () => {
-    onAddDiaper({
+    const entry = {
       id: generateId(),
       time: time.toISOString(),
       pee,
       poop,
       empty: emptyDiaper,
+    };
+    doSave('diaper', onAddDiaper, entry, () => {
+      setPee(false);
+      setPoop(false);
+      setEmptyDiaper(false);
+      setTime(new Date());
     });
-    setPee(false);
-    setPoop(false);
-    setEmptyDiaper(false);
-    setTime(new Date());
-    showSaved('diaper');
   };
 
   const handleSavePumping = () => {
-    onAddPumping({
+    const entry = {
       id: generateId(),
       time: time.toISOString(),
       durationMinutes: pumpingMin,
+    };
+    doSave('pumping', onAddPumping, entry, () => {
+      setPumpingMin(0);
+      setTime(new Date());
     });
-    setPumpingMin(0);
-    setTime(new Date());
-    showSaved('pumping');
   };
 
   const handleSaveVitaminD = () => {
-    onAddVitaminD({
+    const entry = {
       id: generateId(),
       time: new Date().toISOString(),
-    });
-    showSaved('vitaminD');
+    };
+    doSave('vitaminD', onAddVitaminD, entry, null);
   };
 
   return (
@@ -91,12 +130,12 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
         <div className="quick-picks">
           <button type="button" className={`quick-pick ${breastfeedingMin === 20 ? 'selected' : ''}`} onClick={() => setBreastfeedingMin(20)}>20</button>
         </div>
-        <button
-          className={`save-btn ${savedSection === 'feeding' ? 'saved' : ''}`}
+        <SaveButton
+          status={getStatus('feeding')}
           onClick={handleSaveFeeding}
-        >
-          {savedSection === 'feeding' ? '✓ נשמר!' : 'שמור אוכל'}
-        </button>
+          onRetry={() => handleRetry('feeding')}
+          label="שמור אוכל"
+        />
       </div>
 
       <div className="card">
@@ -124,12 +163,12 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
             ריק
           </button>
         </div>
-        <button
-          className={`save-btn ${savedSection === 'diaper' ? 'saved' : ''}`}
+        <SaveButton
+          status={getStatus('diaper')}
           onClick={handleSaveDiaper}
-        >
-          {savedSection === 'diaper' ? '✓ נשמר!' : 'שמור טיטול'}
-        </button>
+          onRetry={() => handleRetry('diaper')}
+          label="שמור טיטול"
+        />
       </div>
 
       <div className="card">
@@ -139,23 +178,48 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
           <button type="button" className={`quick-pick ${pumpingMin === 15 ? 'selected' : ''}`} onClick={() => setPumpingMin(15)}>15</button>
           <button type="button" className={`quick-pick ${pumpingMin === 35 ? 'selected' : ''}`} onClick={() => setPumpingMin(35)}>35</button>
         </div>
-        <button
-          className={`save-btn ${savedSection === 'pumping' ? 'saved' : ''}`}
+        <SaveButton
+          status={getStatus('pumping')}
           onClick={handleSavePumping}
-        >
-          {savedSection === 'pumping' ? '✓ נשמר!' : 'שמור שאיבה'}
-        </button>
+          onRetry={() => handleRetry('pumping')}
+          label="שמור שאיבה"
+        />
       </div>
 
       <div className="card">
         <div className="card-title">☀️ ויטמין D</div>
-        <button
-          className={`save-btn ${savedSection === 'vitaminD' ? 'saved' : ''}`}
+        <SaveButton
+          status={getStatus('vitaminD')}
           onClick={handleSaveVitaminD}
-        >
-          {savedSection === 'vitaminD' ? '✓ נשמר!' : 'קיבלה ויטמין D'}
-        </button>
+          onRetry={() => handleRetry('vitaminD')}
+          label="קיבלה ויטמין D"
+        />
       </div>
     </div>
+  );
+}
+
+function SaveButton({ status, onClick, onRetry, label }) {
+  if (status === 'error') {
+    return (
+      <button className="save-btn save-error" onClick={onRetry}>
+        <span className="save-error-icon">✕</span> לא נשמר — לחצי לנסות שוב
+      </button>
+    );
+  }
+
+  const cls =
+    status === 'saving' ? 'save-btn saving' :
+    status === 'saved' ? 'save-btn saved' : 'save-btn';
+
+  const text =
+    status === 'saving' ? 'שומר...' :
+    status === 'saved' ? '✓ נשמר!' : label;
+
+  return (
+    <button className={cls} onClick={onClick} disabled={status === 'saving'}>
+      {status === 'saving' && <span className="save-spinner" />}
+      {text}
+    </button>
   );
 }

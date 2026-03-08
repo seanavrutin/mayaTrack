@@ -414,6 +414,48 @@ input {
   background: var(--success);
 }
 
+.save-btn.saving {
+  background: var(--primary);
+  opacity: 0.85;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.save-btn.saving:disabled {
+  cursor: wait;
+  opacity: 0.85;
+}
+
+.save-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.save-btn.save-error {
+  background: #e53935;
+  animation: shake 0.35s ease-in-out;
+}
+
+.save-error-icon {
+  font-weight: 700;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
 /* ── Summary Cards ── */
 
 .summary {
