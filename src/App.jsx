@@ -1,97 +1,102 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { isConfigured, fetchAll, addEntry, deleteEntry, updateSetting } from './services/sheetsApi';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './services/firebase';
+import { getUserFamily, subscribeToFamily, addEntry, deleteEntry, updateSetting } from './services/firebaseApi';
 import EntryForm from './components/EntryForm';
 import Summary from './components/Summary';
 import SidePanel from './components/SidePanel';
-import SetupScreen from './components/SetupScreen';
+import LoginScreen from './components/LoginScreen';
+import FamilyScreen from './components/FamilyScreen';
 import useSwipe from './hooks/useSwipe';
 
-const SYNC_INTERVAL = 30_000;
-const CACHE_KEY = 'maya-cache';
-
-function readCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(data) {
-  localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-}
-
 function App() {
-  const [configured, setConfigured] = useState(isConfigured);
-  const [syncing, setSyncing] = useState(false);
-  const [initialSyncDone, setInitialSyncDone] = useState(!!readCache());
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const [family, setFamily] = useState(null);
+  const [familyLoading, setFamilyLoading] = useState(false);
+
+  const [feedingEntries, setFeedingEntries] = useState([]);
+  const [diaperEntries, setDiaperEntries] = useState([]);
+  const [pumpingEntries, setPumpingEntries] = useState([]);
+  const [vitaminDEntries, setVitaminDEntries] = useState([]);
+  const [settings, setSettings] = useState({
+    feedingIntervalMinutes: 180,
+    pumpingIntervalMinutes: 180,
+  });
+  const [dataReady, setDataReady] = useState(false);
+
   const [activeTab, setActiveTab] = useState('form');
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
+  const [slideDir, setSlideDir] = useState(null);
+  const mainRef = useRef(null);
 
-  const cached = readCache();
-  const [feedingEntries, setFeedingEntries] = useState(cached?.feeding ?? []);
-  const [diaperEntries, setDiaperEntries] = useState(cached?.diaper ?? []);
-  const [pumpingEntries, setPumpingEntries] = useState(cached?.pumping ?? []);
-  const [vitaminDEntries, setVitaminDEntries] = useState(cached?.vitaminD ?? []);
-  const [settings, setSettings] = useState(
-    cached?.settings ?? { feedingIntervalMinutes: 180, pumpingIntervalMinutes: 180 },
-  );
-
-  const syncFromSheet = useCallback(async () => {
-    if (!isConfigured()) return;
-    setSyncing(true);
-    try {
-      const data = await fetchAll();
-      setFeedingEntries(data.feeding);
-      setDiaperEntries(data.diaper);
-      setPumpingEntries(data.pumping);
-      setVitaminDEntries(data.vitaminD);
-      setSettings(data.settings);
-      writeCache(data);
-    } catch (err) {
-      console.error('Sync read error:', err);
-    } finally {
-      setSyncing(false);
-      setInitialSyncDone(true);
-    }
+  useEffect(() => {
+    return onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthLoading(false);
+    });
   }, []);
 
   useEffect(() => {
-    if (!configured) return;
-    syncFromSheet(false);
-    const id = setInterval(() => syncFromSheet(false), SYNC_INTERVAL);
-    return () => clearInterval(id);
-  }, [configured, syncFromSheet]);
+    if (!user) {
+      setFamily(null);
+      setFamilyLoading(false);
+      return;
+    }
+    setFamilyLoading(true);
+    getUserFamily(user.uid)
+      .then(setFamily)
+      .catch(console.error)
+      .finally(() => setFamilyLoading(false));
+  }, [user]);
 
-  /* ── Write helpers: write to Sheet then re-fetch ── */
+  useEffect(() => {
+    if (!family?.familyId) {
+      setDataReady(false);
+      setFeedingEntries([]);
+      setDiaperEntries([]);
+      setPumpingEntries([]);
+      setVitaminDEntries([]);
+      return;
+    }
 
-  const writeAndSync = async (apiFn) => {
-    await apiFn();
-    await syncFromSheet();
+    const ready = { feedings: false, diapers: false, pumpings: false, vitaminD: false, settings: false };
+    function checkReady() {
+      if (Object.values(ready).every(Boolean)) setDataReady(true);
+    }
+
+    return subscribeToFamily(family.familyId, {
+      feedings: (entries) => { setFeedingEntries(entries); ready.feedings = true; checkReady(); },
+      diapers: (entries) => { setDiaperEntries(entries); ready.diapers = true; checkReady(); },
+      pumpings: (entries) => { setPumpingEntries(entries); ready.pumpings = true; checkReady(); },
+      vitaminD: (entries) => { setVitaminDEntries(entries); ready.vitaminD = true; checkReady(); },
+      settings: (s) => {
+        setSettings({
+          feedingIntervalMinutes: s.feedingIntervalMinutes || 180,
+          pumpingIntervalMinutes: s.pumpingIntervalMinutes || 180,
+        });
+        ready.settings = true;
+        checkReady();
+      },
+    });
+  }, [family?.familyId]);
+
+  const handleAddEntry = async (collectionName, entry) => {
+    await addEntry(family.familyId, collectionName, entry);
   };
 
-  const addFeeding = (entry) => writeAndSync(() => addEntry('feeding', entry));
-  const addDiaper = (entry) => writeAndSync(() => addEntry('diaper', entry));
-  const addPumping = (entry) => writeAndSync(() => addEntry('pumping', entry));
-  const addVitaminD = (entry) => writeAndSync(() => addEntry('vitaminD', entry));
+  const handleDeleteEntry = async (collectionName, id) => {
+    await deleteEntry(family.familyId, collectionName, id);
+  };
 
-  const removeFeeding = (id) => writeAndSync(() => deleteEntry('feeding', id));
-  const removeDiaper = (id) => writeAndSync(() => deleteEntry('diaper', id));
-  const removePumping = (id) => writeAndSync(() => deleteEntry('pumping', id));
-  const removeVitaminD = (id) => writeAndSync(() => deleteEntry('vitaminD', id));
-
-  const changeSettings = (newSettings) => {
-    setSettings(newSettings);
+  const handleSettingsChange = (newSettings) => {
     Object.entries(newSettings).forEach(([key, value]) => {
       if (settings[key] !== value) {
-        updateSetting(key, value).catch(console.error);
+        updateSetting(family.familyId, key, value).catch(console.error);
       }
     });
   };
-
-  const [slideDir, setSlideDir] = useState(null);
-  const mainRef = useRef(null);
 
   const switchTab = useCallback((tab, dir) => {
     if (tab === activeTab) return;
@@ -110,10 +115,21 @@ function App() {
     () => switchTab('summary', 'slide-left'),
   );
 
-  /* ── Setup screen ── */
+  if (authLoading || familyLoading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner" />
+        <p>טוען...</p>
+      </div>
+    );
+  }
 
-  if (!configured) {
-    return <SetupScreen onReady={() => { setConfigured(true); }} />;
+  if (!user) {
+    return <LoginScreen />;
+  }
+
+  if (!family) {
+    return <FamilyScreen user={user} onFamilyReady={setFamily} />;
   }
 
   return (
@@ -129,7 +145,6 @@ function App() {
         </nav>
         <h1>MayaTrack 👶</h1>
         <div className="header-left">
-          {syncing && <span className="sync-spinner" title="מסנכרן..." />}
           <button className="menu-btn" onClick={() => setSidePanelOpen(true)}>☰</button>
         </div>
       </header>
@@ -140,7 +155,12 @@ function App() {
         {...swipeHandlers}
       >
         {activeTab === 'form' ? (
-          <EntryForm onAddFeeding={addFeeding} onAddDiaper={addDiaper} onAddPumping={addPumping} onAddVitaminD={addVitaminD} />
+          <EntryForm
+            onAddFeeding={(e) => handleAddEntry('feedings', e)}
+            onAddDiaper={(e) => handleAddEntry('diapers', e)}
+            onAddPumping={(e) => handleAddEntry('pumpings', e)}
+            onAddVitaminD={(e) => handleAddEntry('vitaminD', e)}
+          />
         ) : (
           <Summary
             feedingEntries={feedingEntries}
@@ -148,7 +168,7 @@ function App() {
             pumpingEntries={pumpingEntries}
             vitaminDEntries={vitaminDEntries}
             settings={settings}
-            loading={syncing && !initialSyncDone}
+            loading={!dataReady}
           />
         )}
       </main>
@@ -161,11 +181,13 @@ function App() {
         pumpingEntries={pumpingEntries}
         vitaminDEntries={vitaminDEntries}
         settings={settings}
-        onSettingsChange={changeSettings}
-        onDeleteFeeding={removeFeeding}
-        onDeleteDiaper={removeDiaper}
-        onDeletePumping={removePumping}
-        onDeleteVitaminD={removeVitaminD}
+        onSettingsChange={handleSettingsChange}
+        onDeleteFeeding={(id) => handleDeleteEntry('feedings', id)}
+        onDeleteDiaper={(id) => handleDeleteEntry('diapers', id)}
+        onDeletePumping={(id) => handleDeleteEntry('pumpings', id)}
+        onDeleteVitaminD={(id) => handleDeleteEntry('vitaminD', id)}
+        family={family}
+        user={user}
       />
     </div>
   );

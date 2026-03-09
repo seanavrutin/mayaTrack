@@ -51,6 +51,8 @@ export default function TimeInput({ value, onChange }) {
   const addMinutes = (delta) => {
     const d = new Date(valueRef.current);
     d.setMinutes(d.getMinutes() + delta);
+    const now = new Date();
+    if (d > now) d.setTime(now.getTime());
     onChange(d);
   };
 
@@ -80,6 +82,9 @@ export default function TimeInput({ value, onChange }) {
     if (!isNaN(h) && !isNaN(m)) {
       const d = new Date(value);
       d.setHours(h, m, 0, 0);
+      if (d > new Date()) {
+        d.setDate(d.getDate() - 1);
+      }
       onChange(d);
     }
     setEditingTime(false);

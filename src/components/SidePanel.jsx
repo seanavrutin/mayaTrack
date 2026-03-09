@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { logOut } from '../services/firebase';
 import GraphModal from './GraphModal';
 
 function fmt(isoString) {
@@ -31,6 +32,8 @@ export default function SidePanel({
   onDeleteDiaper,
   onDeletePumping,
   onDeleteVitaminD,
+  family,
+  user,
 }) {
   const [activeTable, setActiveTable] = useState(null);
   const [activeGraph, setActiveGraph] = useState(null);
@@ -51,11 +54,25 @@ export default function SidePanel({
       />
       <div className={`side-panel ${isOpen ? 'open' : ''}`}>
         <div className="side-panel-header">
-          <h2>הגדרות וטבלאות</h2>
+          <h2>{family ? `משפחת ${family.name}` : 'הגדרות וטבלאות'}</h2>
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
 
         <div className="side-panel-content">
+          {family && (
+            <div className="family-info-section">
+              <div className="family-info-row">
+                <span className="setting-label">קוד הצטרפות למשפחה:</span>
+                <span className="family-code-badge">{family.code}</span>
+              </div>
+              {user && (
+                <div className="family-info-row">
+                  <span className="setting-label family-user-email">{user.email}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="settings-section">
             <h3>⚙️ הגדרות</h3>
             <div className="setting-row">
@@ -111,6 +128,12 @@ export default function SidePanel({
             </button>
             <button className="graph-btn" onClick={() => setActiveGraph('pumping')}>
               🧴 גרף שאיבה
+            </button>
+          </div>
+
+          <div className="logout-section">
+            <button className="logout-btn" onClick={logOut}>
+              התנתקות
             </button>
           </div>
         </div>

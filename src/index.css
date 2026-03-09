@@ -1058,6 +1058,254 @@ input {
   font-weight: 700;
 }
 
+/* ── Login Screen ── */
+
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.login-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 40px 28px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.login-card h1 {
+  font-size: 2rem;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.login-subtitle {
+  color: var(--text-muted);
+  margin-bottom: 32px;
+  font-size: 1rem;
+}
+
+.google-btn {
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: var(--radius);
+  background: white;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s;
+}
+
+.google-btn:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.google-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.login-error {
+  color: var(--secondary);
+  margin-top: 16px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* ── Family Screen ── */
+
+.family-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.family-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 40px 28px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.family-card h1 {
+  font-size: 2rem;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.family-subtitle {
+  color: var(--text-muted);
+  margin-bottom: 28px;
+  font-size: 1.05rem;
+}
+
+.family-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.family-join-btn {
+  background: transparent;
+  color: var(--primary);
+  border: 2px solid var(--primary);
+}
+
+.family-join-btn:hover {
+  background: var(--primary-light);
+}
+
+.family-logout-btn {
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  padding: 10px;
+  margin-top: 4px;
+  transition: color 0.2s;
+}
+
+.family-logout-btn:hover {
+  color: var(--secondary);
+}
+
+.family-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.family-code-input {
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+}
+
+.family-back-btn {
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 8px;
+  transition: color 0.2s;
+}
+
+.family-back-btn:hover {
+  color: var(--primary);
+}
+
+.family-success h2 {
+  color: var(--success);
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+}
+
+.family-success p {
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+}
+
+.family-code-display {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 16px;
+  border-radius: var(--radius);
+  margin: 16px 0;
+  direction: ltr;
+}
+
+.family-code-hint {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-bottom: 20px;
+}
+
+/* ── Family Info in Side Panel ── */
+
+.family-info-section {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.family-info-section h3 {
+  font-size: 0.95rem;
+  color: var(--primary-dark);
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.family-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.family-code-badge {
+  font-family: monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 3px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.1em;
+  direction: ltr;
+}
+
+.family-user-email {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* ── Logout ── */
+
+.logout-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--secondary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: 2px solid var(--secondary-light);
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: var(--secondary-light);
+  border-color: var(--secondary);
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 480px) {
