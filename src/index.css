@@ -140,6 +140,218 @@ input {
   to   { opacity: 1; transform: translateX(0); }
 }
 
+/* ── Tile Grid ── */
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.tile {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 18px 8px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.tile:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.tile:active {
+  transform: scale(0.96);
+}
+
+.tile-active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.tile-emoji {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.tile-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  text-align: center;
+}
+
+/* ── Expanded Section ── */
+
+.section-expanded {
+  animation: expandIn 0.25s ease-out;
+}
+
+@keyframes expandIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.section-fields {
+  margin-top: 12px;
+}
+
+/* ── Breastfeeding Timer ── */
+
+.bf-timer {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.bf-breasts {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.bf-breast-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.bf-breast-btn {
+  padding: 12px 8px;
+  border-radius: var(--radius);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  font-weight: 700;
+  font-size: 1rem;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+  width: 100%;
+}
+
+.bf-breast-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary-dark);
+}
+
+.bf-breast-btn.timing {
+  animation: bfPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes bfPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 92, 191, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(124, 92, 191, 0); }
+}
+
+.bf-sessions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+}
+
+.bf-session {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  direction: ltr;
+}
+
+.bf-session-active {
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.bf-timer-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.bf-timer-controls .bf-timer-btn {
+  margin-bottom: 0;
+}
+
+.bf-timer-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius);
+  font-weight: 700;
+  font-size: 1rem;
+  transition: all 0.2s;
+  margin-bottom: 12px;
+}
+
+.bf-timer-btn.start {
+  background: var(--success);
+  color: white;
+}
+
+.bf-timer-btn.start:hover {
+  background: #57a05a;
+}
+
+.bf-timer-btn.pause {
+  background: #ffa726;
+  color: white;
+}
+
+.bf-timer-btn.pause:hover {
+  background: #ef9a18;
+}
+
+.bf-timer-btn.stop {
+  background: var(--secondary);
+  color: white;
+}
+
+.bf-timer-btn.stop:hover {
+  background: #d84f7e;
+}
+
+.bf-timer-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bf-session-active.paused {
+  opacity: 0.6;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 1; }
+}
+
+.bf-total {
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  padding: 10px;
+  background: var(--primary-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+
 /* ── Card ── */
 
 .card {
@@ -334,6 +546,33 @@ input {
   background: var(--primary-light);
   color: var(--text);
   width: 140px;
+}
+
+/* ── Bottle Type Toggle ── */
+
+.bottle-type-toggle {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.bottle-type-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.bottle-type-btn.selected {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary-dark);
 }
 
 /* ── Diaper Options ── */
@@ -557,6 +796,12 @@ input {
 
 .summary-row-time.warning {
   color: var(--secondary);
+}
+
+.bf-time-range {
+  direction: ltr;
+  display: inline-block;
+  letter-spacing: 0.02em;
 }
 
 .summary-row-ago,
@@ -1324,5 +1569,21 @@ input {
   .tabs button {
     padding: 7px 12px;
     font-size: 0.85rem;
+  }
+
+  .tile-grid {
+    gap: 6px;
+  }
+
+  .tile {
+    padding: 12px 2px;
+  }
+
+  .tile-emoji {
+    font-size: 1.2rem;
+  }
+
+  .tile-label {
+    font-size: 0.68rem;
   }
 }

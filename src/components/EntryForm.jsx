@@ -1,9 +1,15 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import NumberStepper from './NumberStepper';
 import TimeInput from './TimeInput';
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+function formatDuration(totalSeconds) {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 // 'idle' | 'saving' | 'saved' | 'error'
@@ -28,16 +34,36 @@ function useSaveStatus() {
 
 export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onAddVitaminD }) {
   const [time, setTime] = useState(() => new Date());
-  const [formula, setFormula] = useState(0);
-  const [pumpedMilk, setPumpedMilk] = useState(0);
+  const [bottleType, setBottleType] = useState('formula');
+  const [bottleAmount, setBottleAmount] = useState(0);
   const [breastfeedingMin, setBreastfeedingMin] = useState(0);
   const [pee, setPee] = useState(false);
   const [poop, setPoop] = useState(false);
   const [emptyDiaper, setEmptyDiaper] = useState(false);
   const [pumpingMin, setPumpingMin] = useState(0);
 
+  // Breastfeeding timer state
+  const [activeBreast, setActiveBreast] = useState(null);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerPaused, setTimerPaused] = useState(false);
+  const [timerStart, setTimerStart] = useState(null);
+  const [pausedElapsed, setPausedElapsed] = useState(0);
+  const [currentElapsed, setCurrentElapsed] = useState(0);
+  const [rightSessions, setRightSessions] = useState([]);
+  const [leftSessions, setLeftSessions] = useState([]);
+  const [bfSessionStart, setBfSessionStart] = useState(null);
+  const [firstBreast, setFirstBreast] = useState(null);
+
   const { setStatus, getStatus } = useSaveStatus();
   const retryRef = useRef({});
+
+  useEffect(() => {
+    if (!timerRunning || !timerStart) return;
+    const interval = setInterval(() => {
+      setCurrentElapsed(pausedElapsed + Math.floor((Date.now() - timerStart) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning, timerStart, pausedElapsed]);
 
   const doSave = async (section, addFn, entry, resetFn) => {
     if (getStatus(section) === 'saving') return;
@@ -58,18 +84,116 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
     if (fn) fn();
   };
 
-  const handleSaveFeeding = () => {
+  // --- Bottle save (formula + pumped milk only) ---
+  const handleSaveBottle = () => {
     const entry = {
       id: generateId(),
+      type: 'bottle',
       time: time.toISOString(),
-      formula,
-      pumpedMilk,
-      breastfeedingMinutes: breastfeedingMin,
+      formula: bottleType === 'formula' ? bottleAmount : 0,
+      pumpedMilk: bottleType === 'pumpedMilk' ? bottleAmount : 0,
+      breastfeedingMinutes: 0,
     };
-    doSave('feeding', onAddFeeding, entry, () => {
-      setFormula(0);
-      setPumpedMilk(0);
+    doSave('bottle', onAddFeeding, entry, () => {
+      setBottleAmount(0);
+      setTime(new Date());
+    });
+  };
+
+  // --- Breastfeeding timer helpers ---
+  const resetTimer = () => {
+    setTimerRunning(false);
+    setTimerPaused(false);
+    setTimerStart(null);
+    setPausedElapsed(0);
+    setCurrentElapsed(0);
+    setBfSessionStart(null);
+    setFirstBreast(null);
+  };
+
+  const recordSession = (totalSeconds) => {
+    if (totalSeconds > 0) {
+      if (activeBreast === 'right') {
+        setRightSessions((prev) => [...prev, totalSeconds]);
+      } else if (activeBreast === 'left') {
+        setLeftSessions((prev) => [...prev, totalSeconds]);
+      }
+    }
+  };
+
+  const stopCurrentTimer = () => {
+    const total = timerRunning && timerStart
+      ? pausedElapsed + Math.floor((Date.now() - timerStart) / 1000)
+      : pausedElapsed;
+    recordSession(total);
+    resetTimer();
+    return total;
+  };
+
+  const handleBreastSelect = (breast) => {
+    if ((timerRunning || timerPaused) && activeBreast && activeBreast !== breast) {
+      stopCurrentTimer();
+    }
+    setActiveBreast(breast);
+  };
+
+  const handleTimerStart = () => {
+    if (!activeBreast) return;
+    if (!bfSessionStart) {
+      setBfSessionStart(new Date().toISOString());
+      setFirstBreast(activeBreast);
+    }
+    setTimerRunning(true);
+    setTimerPaused(false);
+    setTimerStart(Date.now());
+    setPausedElapsed(0);
+    setCurrentElapsed(0);
+  };
+
+  const handleTimerPause = () => {
+    const elapsed = pausedElapsed + Math.floor((Date.now() - timerStart) / 1000);
+    setTimerRunning(false);
+    setTimerPaused(true);
+    setPausedElapsed(elapsed);
+    setCurrentElapsed(elapsed);
+    setTimerStart(null);
+  };
+
+  const handleTimerResume = () => {
+    setTimerRunning(true);
+    setTimerPaused(false);
+    setTimerStart(Date.now());
+  };
+
+  const handleTimerStop = () => {
+    stopCurrentTimer();
+  };
+
+  const totalTimerSeconds = [...rightSessions, ...leftSessions].reduce((a, b) => a + b, 0)
+    + (timerRunning ? currentElapsed : 0);
+
+  const handleSaveBreastfeeding = () => {
+    if (timerRunning || timerPaused) stopCurrentTimer();
+    const endTime = new Date().toISOString();
+    const finalTotal = [...rightSessions, ...leftSessions].reduce((a, b) => a + b, 0);
+    const totalMinutes = Math.round(finalTotal / 60) + breastfeedingMin;
+    const entry = {
+      id: generateId(),
+      type: 'breastfeeding',
+      time: time.toISOString(),
+      formula: 0,
+      pumpedMilk: 0,
+      breastfeedingMinutes: totalMinutes,
+      startTime: bfSessionStart || time.toISOString(),
+      endTime,
+      startedBreast: firstBreast || activeBreast || 'right',
+    };
+    doSave('breastfeeding', onAddFeeding, entry, () => {
       setBreastfeedingMin(0);
+      setRightSessions([]);
+      setLeftSessions([]);
+      setActiveBreast(null);
+      resetTimer();
       setTime(new Date());
     });
   };
@@ -110,91 +234,215 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
     doSave('vitaminD', onAddVitaminD, entry, null);
   };
 
+  const [openSection, setOpenSection] = useState(null);
+
+  const tiles = [
+    { key: 'bottle', emoji: '🍼', label: 'בקבוק' },
+    { key: 'breastfeeding', emoji: '🤱', label: 'הנקה' },
+    { key: 'diaper', emoji: '🚼', label: 'טיטול' },
+    { key: 'pumping', emoji: '🧴', label: 'שאיבה' },
+    { key: 'vitaminD', emoji: '☀️', label: 'ויטמין D' },
+  ];
+
+  const wrappedSave = (saveFn) => {
+    return () => {
+      saveFn();
+      setOpenSection(null);
+    };
+  };
+
   return (
     <div className="entry-form">
       <div className="card">
         <TimeInput value={time} onChange={setTime} />
       </div>
 
-      <div className="card">
-        <div className="card-title">🍼 אוכל</div>
-        <NumberStepper label='כמות תמ"ל (מ"ל)' value={formula} onChange={setFormula} step={5} />
-        <div className="quick-picks">
-          <button type="button" className={`quick-pick ${formula === 60 ? 'selected' : ''}`} onClick={() => setFormula(60)}>60</button>
-        </div>
-        <NumberStepper label='כמות חלב שאוב (מ"ל)' value={pumpedMilk} onChange={setPumpedMilk} step={5} />
-        <div className="quick-picks">
-          <button type="button" className={`quick-pick ${pumpedMilk === 60 ? 'selected' : ''}`} onClick={() => setPumpedMilk(60)}>60</button>
-        </div>
-        <NumberStepper label="זמן הנקה (דקות)" value={breastfeedingMin} onChange={setBreastfeedingMin} step={1} />
-        <div className="quick-picks">
-          <button type="button" className={`quick-pick ${breastfeedingMin === 20 ? 'selected' : ''}`} onClick={() => setBreastfeedingMin(20)}>20</button>
-        </div>
-        <SaveButton
-          status={getStatus('feeding')}
-          onClick={handleSaveFeeding}
-          onRetry={() => handleRetry('feeding')}
-          label="שמור אוכל"
-        />
+      <div className="tile-grid">
+        {tiles.map(({ key, emoji, label }) => (
+          <button
+            key={key}
+            type="button"
+            className={`tile ${openSection === key ? 'tile-active' : ''}`}
+            onClick={() => setOpenSection(openSection === key ? null : key)}
+          >
+            <span className="tile-emoji">{emoji}</span>
+            <span className="tile-label">{label}</span>
+          </button>
+        ))}
       </div>
 
-      <div className="card">
-        <div className="card-title">🚼 טיטול</div>
-        <div className="diaper-options">
-          <button
-            type="button"
-            className={`diaper-option ${pee ? 'selected' : ''}`}
-            onClick={() => setPee(!pee)}
-          >
-            פיפי
-          </button>
-          <button
-            type="button"
-            className={`diaper-option ${poop ? 'selected' : ''}`}
-            onClick={() => setPoop(!poop)}
-          >
-            קקי
-          </button>
-          <button
-            type="button"
-            className={`diaper-option ${emptyDiaper ? 'selected' : ''}`}
-            onClick={() => setEmptyDiaper(!emptyDiaper)}
-          >
-            ריק
-          </button>
+      {openSection === 'bottle' && (
+        <div className="card section-expanded">
+          <div className="card-title">🍼 בקבוק</div>
+          <div className="section-fields">
+            <div className="bottle-type-toggle">
+              <button
+                type="button"
+                className={`bottle-type-btn ${bottleType === 'formula' ? 'selected' : ''}`}
+                onClick={() => setBottleType('formula')}
+              >
+                תמ״ל
+              </button>
+              <button
+                type="button"
+                className={`bottle-type-btn ${bottleType === 'pumpedMilk' ? 'selected' : ''}`}
+                onClick={() => setBottleType('pumpedMilk')}
+              >
+                חלב שאוב
+              </button>
+            </div>
+            <NumberStepper label='כמות (מ"ל)' value={bottleAmount} onChange={setBottleAmount} step={5} />
+            <div className="quick-picks">
+              <button type="button" className={`quick-pick ${bottleAmount === 30 ? 'selected' : ''}`} onClick={() => setBottleAmount(30)}>30</button>
+              <button type="button" className={`quick-pick ${bottleAmount === 60 ? 'selected' : ''}`} onClick={() => setBottleAmount(60)}>60</button>
+            </div>
+          </div>
+          <SaveButton
+            status={getStatus('bottle')}
+            onClick={wrappedSave(handleSaveBottle)}
+            onRetry={() => handleRetry('bottle')}
+            label="שמור בקבוק"
+          />
         </div>
-        <SaveButton
-          status={getStatus('diaper')}
-          onClick={handleSaveDiaper}
-          onRetry={() => handleRetry('diaper')}
-          label="שמור טיטול"
-        />
-      </div>
+      )}
 
-      <div className="card">
-        <div className="card-title">🧴 שאיבה</div>
-        <NumberStepper label="זמן שאיבה (דקות)" value={pumpingMin} onChange={setPumpingMin} step={1} />
-        <div className="quick-picks">
-          <button type="button" className={`quick-pick ${pumpingMin === 15 ? 'selected' : ''}`} onClick={() => setPumpingMin(15)}>15</button>
-          <button type="button" className={`quick-pick ${pumpingMin === 35 ? 'selected' : ''}`} onClick={() => setPumpingMin(35)}>35</button>
+      {openSection === 'breastfeeding' && (
+        <div className="card section-expanded">
+          <div className="card-title">🤱 הנקה</div>
+          <div className="section-fields">
+            <NumberStepper label="דקות ידני" value={breastfeedingMin} onChange={setBreastfeedingMin} step={1} />
+
+            <div className="bf-timer">
+              <div className="bf-breasts">
+                <div className="bf-breast-col">
+                  <button
+                    type="button"
+                    className={`bf-breast-btn ${activeBreast === 'right' ? 'active' : ''} ${activeBreast === 'right' && timerRunning ? 'timing' : ''}`}
+                    onClick={() => handleBreastSelect('right')}
+                  >
+                    ימין
+                  </button>
+                  <div className="bf-sessions">
+                    {rightSessions.map((dur, i) => (
+                      <div key={i} className="bf-session">{formatDuration(dur)}</div>
+                    ))}
+                    {activeBreast === 'right' && (timerRunning || timerPaused) && (
+                      <div className={`bf-session bf-session-active ${timerPaused ? 'paused' : ''}`}>{formatDuration(currentElapsed)}</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bf-breast-col">
+                  <button
+                    type="button"
+                    className={`bf-breast-btn ${activeBreast === 'left' ? 'active' : ''} ${activeBreast === 'left' && timerRunning ? 'timing' : ''}`}
+                    onClick={() => handleBreastSelect('left')}
+                  >
+                    שמאל
+                  </button>
+                  <div className="bf-sessions">
+                    {leftSessions.map((dur, i) => (
+                      <div key={i} className="bf-session">{formatDuration(dur)}</div>
+                    ))}
+                    {activeBreast === 'left' && (timerRunning || timerPaused) && (
+                      <div className={`bf-session bf-session-active ${timerPaused ? 'paused' : ''}`}>{formatDuration(currentElapsed)}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {!timerRunning && !timerPaused && (
+                <button
+                  type="button"
+                  className="bf-timer-btn start"
+                  onClick={handleTimerStart}
+                  disabled={!activeBreast}
+                >
+                  ▶ התחל
+                </button>
+              )}
+              {(timerRunning || timerPaused) && (
+                <div className="bf-timer-controls">
+                  {timerRunning ? (
+                    <button type="button" className="bf-timer-btn pause" onClick={handleTimerPause}>
+                      ⏸ השהה
+                    </button>
+                  ) : (
+                    <button type="button" className="bf-timer-btn start" onClick={handleTimerResume}>
+                      ▶ המשך
+                    </button>
+                  )}
+                  <button type="button" className="bf-timer-btn stop" onClick={handleTimerStop}>
+                    ⏹ עצור
+                  </button>
+                </div>
+              )}
+
+              {(rightSessions.length > 0 || leftSessions.length > 0 || timerRunning) && (
+                <div className="bf-total">
+                  סה״כ: {formatDuration(totalTimerSeconds)}
+                </div>
+              )}
+            </div>
+          </div>
+          <SaveButton
+            status={getStatus('breastfeeding')}
+            onClick={wrappedSave(handleSaveBreastfeeding)}
+            onRetry={() => handleRetry('breastfeeding')}
+            label="שמור הנקה"
+          />
         </div>
-        <SaveButton
-          status={getStatus('pumping')}
-          onClick={handleSavePumping}
-          onRetry={() => handleRetry('pumping')}
-          label="שמור שאיבה"
-        />
-      </div>
+      )}
 
-      <div className="card">
-        <div className="card-title">☀️ ויטמין D</div>
-        <SaveButton
-          status={getStatus('vitaminD')}
-          onClick={handleSaveVitaminD}
-          onRetry={() => handleRetry('vitaminD')}
-          label="קיבלה ויטמין D"
-        />
-      </div>
+      {openSection === 'diaper' && (
+        <div className="card section-expanded">
+          <div className="card-title">🚼 טיטול</div>
+          <div className="section-fields">
+            <div className="diaper-options">
+              <button type="button" className={`diaper-option ${pee ? 'selected' : ''}`} onClick={() => setPee(!pee)}>פיפי</button>
+              <button type="button" className={`diaper-option ${poop ? 'selected' : ''}`} onClick={() => setPoop(!poop)}>קקי</button>
+              <button type="button" className={`diaper-option ${emptyDiaper ? 'selected' : ''}`} onClick={() => setEmptyDiaper(!emptyDiaper)}>ריק</button>
+            </div>
+          </div>
+          <SaveButton
+            status={getStatus('diaper')}
+            onClick={wrappedSave(handleSaveDiaper)}
+            onRetry={() => handleRetry('diaper')}
+            label="שמור טיטול"
+          />
+        </div>
+      )}
+
+      {openSection === 'pumping' && (
+        <div className="card section-expanded">
+          <div className="card-title">🧴 שאיבה</div>
+          <div className="section-fields">
+            <NumberStepper label="זמן שאיבה (דקות)" value={pumpingMin} onChange={setPumpingMin} step={1} />
+            <div className="quick-picks">
+              <button type="button" className={`quick-pick ${pumpingMin === 15 ? 'selected' : ''}`} onClick={() => setPumpingMin(15)}>15</button>
+              <button type="button" className={`quick-pick ${pumpingMin === 35 ? 'selected' : ''}`} onClick={() => setPumpingMin(35)}>35</button>
+            </div>
+          </div>
+          <SaveButton
+            status={getStatus('pumping')}
+            onClick={wrappedSave(handleSavePumping)}
+            onRetry={() => handleRetry('pumping')}
+            label="שמור שאיבה"
+          />
+        </div>
+      )}
+
+      {openSection === 'vitaminD' && (
+        <div className="card section-expanded">
+          <div className="card-title">☀️ ויטמין D</div>
+          <SaveButton
+            status={getStatus('vitaminD')}
+            onClick={wrappedSave(handleSaveVitaminD)}
+            onRetry={() => handleRetry('vitaminD')}
+            label="קיבלה ויטמין D"
+          />
+        </div>
+      )}
     </div>
   );
 }

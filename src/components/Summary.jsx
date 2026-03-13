@@ -75,30 +75,56 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
   return (
     <div className="summary">
       {/* Feeding card */}
-      <div className={`summary-card ${feedingOverdue ? 'overdue' : ''}`}>
-        <div className="summary-card-icon">🍼</div>
+      <div className={`summary-card ${lastFeeding?.type !== 'breastfeeding' && feedingOverdue ? 'overdue' : ''}`}>
+        <div className="summary-card-icon">{lastFeeding?.type === 'breastfeeding' ? '🤱' : '🍼'}</div>
         <div className="summary-card-content">
-          <h3 className="summary-card-title">האכלה</h3>
-          <div className="summary-row">
-            <span className="summary-row-icon">✅</span>
-            <div className="summary-row-text">
-              <span className="summary-row-label">אחרונה</span>
-              <span className="summary-row-time">{formatTime(lastFeeding?.time)}</span>
-            </div>
-            <span className="summary-row-ago">{timeAgo(lastFeeding?.time)}</span>
-          </div>
-          <div className="summary-row">
-            <span className="summary-row-icon">{feedingOverdue ? '🔴' : '⏰'}</span>
-            <div className="summary-row-text">
-              <span className="summary-row-label">הבאה עד</span>
-              <span className={`summary-row-time ${feedingOverdue ? 'warning' : ''}`}>
-                {formatTime(nextFeedingTime)}
-              </span>
-            </div>
-            <span className={`summary-row-countdown ${feedingOverdue ? 'warning' : ''}`}>
-              {timeUntil(nextFeedingTime)}
-            </span>
-          </div>
+          <h3 className="summary-card-title">
+            {lastFeeding?.type === 'breastfeeding' ? 'הנקה' : 'האכלה'}
+          </h3>
+          {lastFeeding?.type === 'breastfeeding' ? (
+            <>
+              <div className="summary-row">
+                <span className="summary-row-icon">🕐</span>
+                <div className="summary-row-text">
+                  <span className="summary-row-time bf-time-range">
+                    {formatTime(lastFeeding.startTime)} → {formatTime(lastFeeding.endTime)}
+                  </span>
+                </div>
+                <span className="summary-row-ago">{timeAgo(lastFeeding.endTime)}</span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-row-icon">⏱</span>
+                <div className="summary-row-text">
+                  <span className="summary-row-label">
+                    התחילה בצד <strong>{lastFeeding.startedBreast === 'right' ? 'ימין' : 'שמאל'}</strong> וינקה <strong>{lastFeeding.breastfeedingMinutes} דקות</strong>
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="summary-row">
+                <span className="summary-row-icon">✅</span>
+                <div className="summary-row-text">
+                  <span className="summary-row-label">אחרונה</span>
+                  <span className="summary-row-time">{formatTime(lastFeeding?.time)}</span>
+                </div>
+                <span className="summary-row-ago">{timeAgo(lastFeeding?.time)}</span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-row-icon">{feedingOverdue ? '🔴' : '⏰'}</span>
+                <div className="summary-row-text">
+                  <span className="summary-row-label">הבאה עד</span>
+                  <span className={`summary-row-time ${feedingOverdue ? 'warning' : ''}`}>
+                    {formatTime(nextFeedingTime)}
+                  </span>
+                </div>
+                <span className={`summary-row-countdown ${feedingOverdue ? 'warning' : ''}`}>
+                  {timeUntil(nextFeedingTime)}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
