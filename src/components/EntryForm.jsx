@@ -36,7 +36,10 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
   const [time, setTime] = useState(() => new Date());
   const [bottleType, setBottleType] = useState('formula');
   const [bottleAmount, setBottleAmount] = useState(0);
-  const [breastfeedingMin, setBreastfeedingMin] = useState(0);
+  const [manualStartTime, setManualStartTime] = useState('');
+  const [manualEndTime, setManualEndTime] = useState('');
+  const [manualBreast, setManualBreast] = useState('right');
+  const [bfMode, setBfMode] = useState('timer');
   const [pee, setPee] = useState(false);
   const [poop, setPoop] = useState(false);
   const [emptyDiaper, setEmptyDiaper] = useState(false);
@@ -101,32 +104,40 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
   };
 
   // --- Breastfeeding timer helpers ---
-  const resetTimer = () => {
+  const resetTimerClock = () => {
     setTimerRunning(false);
     setTimerPaused(false);
     setTimerStart(null);
     setPausedElapsed(0);
     setCurrentElapsed(0);
-    setBfSessionStart(null);
-    setFirstBreast(null);
   };
 
-  const recordSession = (totalSeconds) => {
-    if (totalSeconds > 0) {
-      if (activeBreast === 'right') {
-        setRightSessions((prev) => [...prev, totalSeconds]);
-      } else if (activeBreast === 'left') {
-        setLeftSessions((prev) => [...prev, totalSeconds]);
-      }
+  const resetAll = () => {
+    resetTimerClock();
+    setBfSessionStart(null);
+    setFirstBreast(null);
+    setRightSessions([]);
+    setLeftSessions([]);
+    setActiveBreast(null);
+  };
+
+  const getElapsedSeconds = () => {
+    if (timerRunning && timerStart) {
+      return pausedElapsed + Math.floor((Date.now() - timerStart) / 1000);
     }
+    return pausedElapsed;
   };
 
   const stopCurrentTimer = () => {
-    const total = timerRunning && timerStart
-      ? pausedElapsed + Math.floor((Date.now() - timerStart) / 1000)
-      : pausedElapsed;
-    recordSession(total);
-    resetTimer();
+    const total = getElapsedSeconds();
+    if (total > 0) {
+      if (activeBreast === 'right') {
+        setRightSessions((prev) => [...prev, total]);
+      } else if (activeBreast === 'left') {
+        setLeftSessions((prev) => [...prev, total]);
+      }
+    }
+    resetTimerClock();
     return total;
   };
 
@@ -170,32 +181,80 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
   };
 
   const totalTimerSeconds = [...rightSessions, ...leftSessions].reduce((a, b) => a + b, 0)
-    + (timerRunning ? currentElapsed : 0);
+    + ((timerRunning || timerPaused) ? currentElapsed : 0);
+
+  const hasTimerSessions = rightSessions.length > 0 || leftSessions.length > 0 || timerRunning || timerPaused;
+
+  const buildManualDateTime = (timeStr) => {
+    if (!timeStr) return null;
+    const [h, m] = timeStr.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return null;
+    const d = new Date(time);
+    d.setHours(h, m, 0, 0);
+    return d.toISOString();
+  };
+
+  const manualDurationMin = (() => {
+    if (!manualStartTime || !manualEndTime) return 0;
+    const start = buildManualDateTime(manualStartTime);
+    const end = buildManualDateTime(manualEndTime);
+    if (!start || !end) return 0;
+    const diff = (new Date(end) - new Date(start)) / 60000;
+    return diff > 0 ? Math.round(diff) : 0;
+  })();
 
   const handleSaveBreastfeeding = () => {
-    if (timerRunning || timerPaused) stopCurrentTimer();
-    const endTime = new Date().toISOString();
-    const finalTotal = [...rightSessions, ...leftSessions].reduce((a, b) => a + b, 0);
-    const totalMinutes = Math.round(finalTotal / 60) + breastfeedingMin;
-    const entry = {
-      id: generateId(),
-      type: 'breastfeeding',
-      time: time.toISOString(),
-      formula: 0,
-      pumpedMilk: 0,
-      breastfeedingMinutes: totalMinutes,
-      startTime: bfSessionStart || time.toISOString(),
-      endTime,
-      startedBreast: firstBreast || activeBreast || 'right',
-    };
-    doSave('breastfeeding', onAddFeeding, entry, () => {
-      setBreastfeedingMin(0);
-      setRightSessions([]);
-      setLeftSessions([]);
-      setActiveBreast(null);
-      resetTimer();
-      setTime(new Date());
-    });
+    if (hasTimerSessions) {
+      const savedStartTime = bfSessionStart || time.toISOString();
+      const savedFirstBreast = firstBreast || activeBreast || 'right';
+
+      let lastSessionSeconds = 0;
+      if (timerRunning || timerPaused) {
+        lastSessionSeconds = stopCurrentTimer();
+      }
+      const endTime = new Date().toISOString();
+
+      const allSeconds = [...rightSessions, ...leftSessions].reduce((a, b) => a + b, 0)
+        + lastSessionSeconds;
+      const totalMinutes = Math.round(allSeconds / 60);
+
+      const entry = {
+        id: generateId(),
+        type: 'breastfeeding',
+        time: time.toISOString(),
+        formula: 0,
+        pumpedMilk: 0,
+        breastfeedingMinutes: totalMinutes,
+        startTime: savedStartTime,
+        endTime,
+        startedBreast: savedFirstBreast,
+      };
+      doSave('breastfeeding', onAddFeeding, entry, () => {
+        resetAll();
+        setTime(new Date());
+      });
+    } else {
+      const totalMinutes = manualDurationMin;
+      const startTime = buildManualDateTime(manualStartTime) || time.toISOString();
+      const endTime = buildManualDateTime(manualEndTime) || new Date().toISOString();
+
+      const entry = {
+        id: generateId(),
+        type: 'breastfeeding',
+        time: time.toISOString(),
+        formula: 0,
+        pumpedMilk: 0,
+        breastfeedingMinutes: totalMinutes,
+        startTime,
+        endTime,
+        startedBreast: manualBreast,
+      };
+      doSave('breastfeeding', onAddFeeding, entry, () => {
+        setManualStartTime('');
+        setManualEndTime('');
+        setTime(new Date());
+      });
+    }
   };
 
   const handleSaveDiaper = () => {
@@ -310,8 +369,58 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
         <div className="card section-expanded">
           <div className="card-title">🤱 הנקה</div>
           <div className="section-fields">
-            <NumberStepper label="דקות ידני" value={breastfeedingMin} onChange={setBreastfeedingMin} step={1} />
+            <button
+              type="button"
+              className="bf-mode-toggle"
+              onClick={() => setBfMode(bfMode === 'timer' ? 'manual' : 'timer')}
+            >
+              {bfMode === 'timer' ? '✏️ הזנה ידנית' : '⏱ שעון עצר'}
+            </button>
 
+            {bfMode === 'manual' ? (
+              <div className="bf-manual">
+                <div className="bf-manual-breast-toggle">
+                  <button
+                    type="button"
+                    className={`bf-breast-btn ${manualBreast === 'right' ? 'active' : ''}`}
+                    onClick={() => setManualBreast('right')}
+                  >
+                    ימין
+                  </button>
+                  <button
+                    type="button"
+                    className={`bf-breast-btn ${manualBreast === 'left' ? 'active' : ''}`}
+                    onClick={() => setManualBreast('left')}
+                  >
+                    שמאל
+                  </button>
+                </div>
+                <div className="bf-manual-times">
+                  <div className="bf-manual-field">
+                    <label>התחלה</label>
+                    <input
+                      type="time"
+                      className="bf-time-input"
+                      value={manualStartTime}
+                      onChange={(e) => setManualStartTime(e.target.value)}
+                    />
+                  </div>
+                  <span className="bf-manual-arrow">→</span>
+                  <div className="bf-manual-field">
+                    <label>סיום</label>
+                    <input
+                      type="time"
+                      className="bf-time-input"
+                      value={manualEndTime}
+                      onChange={(e) => setManualEndTime(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {manualDurationMin > 0 && (
+                  <div className="bf-manual-duration">{manualDurationMin} דקות</div>
+                )}
+              </div>
+            ) : (
             <div className="bf-timer">
               <div className="bf-breasts">
                 <div className="bf-breast-col">
@@ -384,6 +493,7 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
                 </div>
               )}
             </div>
+            )}
           </div>
           <SaveButton
             status={getStatus('breastfeeding')}
