@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 const BAR_SPACE = 55;
 const CHART_HEIGHT = 250;
@@ -77,33 +77,13 @@ function computePoopData(diaperEntries) {
 
 function computeFoodData(feedingEntries) {
   const days = getDayRange(feedingEntries);
-  const dayData = {};
-  days.forEach((d) => (dayData[d] = { formula: 0, breast: 0, meals: 0 }));
+  const counts = {};
+  days.forEach((d) => (counts[d] = 0));
   feedingEntries.forEach((e) => {
     const key = toDateKey(e.time);
-    if (!dayData[key]) return;
-    const f = Number(e.formula) || 0;
-    const b = Number(e.pumpedMilk) || 0;
-    if (f > 0 || b > 0) {
-      dayData[key].formula += f;
-      dayData[key].breast += b;
-      dayData[key].meals++;
-    }
+    if (key in counts) counts[key]++;
   });
-  return days.map((d) => {
-    const { formula, breast, meals } = dayData[d];
-    const total = formula + breast;
-    const avgPerMeal = meals > 0 ? total / meals : 0;
-    const formulaPct = total > 0 ? formula / total : 0;
-    const breastPct = total > 0 ? breast / total : 0;
-    return {
-      date: formatDateLabel(d),
-      dateKey: d,
-      formulaPart: Math.round(avgPerMeal * formulaPct),
-      breastPart: Math.round(avgPerMeal * breastPct),
-      meals,
-    };
-  });
+  return days.map((d) => ({ date: formatDateLabel(d), dateKey: d, count: counts[d] }));
 }
 
 function computePumpingData(pumpingEntries) {
@@ -122,22 +102,6 @@ function computePumpingData(pumpingEntries) {
     minutes: dayData[d].totalMinutes,
     sessions: dayData[d].sessions,
   }));
-}
-
-function FoodTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  const formula = payload.find((p) => p.dataKey === 'formulaPart')?.value ?? 0;
-  const breast = payload.find((p) => p.dataKey === 'breastPart')?.value ?? 0;
-  const meals = payload[0]?.payload?.meals ?? 0;
-  return (
-    <div className="graph-tooltip">
-      <p className="graph-tooltip-label">{label}</p>
-      <p>{meals} ארוחות</p>
-      <p>ממוצע לארוחה: {formula + breast} מ״ל</p>
-      {formula > 0 && <p style={{ color: '#f06292' }}>תמ״ל: {formula} מ״ל</p>}
-      {breast > 0 && <p style={{ color: '#7c5cbf' }}>חלב אם: {breast} מ״ל</p>}
-    </div>
-  );
 }
 
 export default function GraphModal({
@@ -189,31 +153,13 @@ export default function GraphModal({
         const d = computeFoodData(feedingEntries);
         const today = todayKey();
         const completed = d.filter((x) => x.dateKey !== today);
-        const totalMeals = completed.reduce((s, x) => s + x.meals, 0);
+        const totalFeedings = completed.reduce((s, x) => s + x.count, 0);
         const totalDays = completed.length;
-        const avgMeals = totalDays > 0 ? (totalMeals / totalDays).toFixed(1) : 0;
-        let totalFormula = 0, totalBreast = 0;
-        feedingEntries.forEach((e) => {
-          if (toDateKey(e.time) === today) return;
-          totalFormula += Number(e.formula) || 0;
-          totalBreast += Number(e.pumpedMilk) || 0;
-        });
-        const totalMl = totalFormula + totalBreast;
-        const formulaPct = totalMl > 0 ? Math.round((totalFormula / totalMl) * 100) : 0;
-        const breastPct = totalMl > 0 ? 100 - formulaPct : 0;
-        let summaryText;
-        if (totalDays === 0) {
-          summaryText = 'אין נתונים (ימים שלמים)';
-        } else {
-          summaryText = `ממוצע: ${avgMeals} ארוחות ביום`;
-          if (totalMl > 0) {
-            summaryText += `\nתמ״ל ${formulaPct}% | חלב אם ${breastPct}%`;
-          }
-        }
+        const avg = totalDays > 0 ? (totalFeedings / totalDays).toFixed(1) : 0;
         return {
           data: d,
-          title: '🍼 גרף אוכל',
-          summary: summaryText,
+          title: '🍼 גרף האכלות',
+          summary: totalDays > 0 ? `ממוצע: ${avg} האכלות ביום` : 'אין נתונים (ימים שלמים)',
         };
       }
       case 'pumping': {
@@ -269,14 +215,13 @@ export default function GraphModal({
         );
       case 'food':
         return (
-          <BarChart width={chartWidth} height={CHART_HEIGHT} data={data} margin={CHART_MARGIN}>
+          <LineChart width={chartWidth} height={CHART_HEIGHT} data={data} margin={CHART_MARGIN}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-            <YAxis unit=" מ״ל" tick={{ fontSize: 11 }} width={50} />
-            <Tooltip content={<FoodTooltip />} />
-            <Bar dataKey="formulaPart" stackId="food" fill="#f06292" />
-            <Bar dataKey="breastPart" stackId="food" fill="#7c5cbf" radius={[4, 4, 0, 0]} />
-          </BarChart>
+            <YAxis allowDecimals={false} tick={{ fontSize: 12 }} width={35} />
+            <Tooltip formatter={(val) => [`${val}`, 'האכלות']} />
+            <Line type="monotone" dataKey="count" stroke="#7c5cbf" strokeWidth={2} dot={{ r: 4, fill: '#7c5cbf' }} activeDot={{ r: 6 }} />
+          </LineChart>
         );
       case 'pumping':
         return (
@@ -309,18 +254,6 @@ export default function GraphModal({
               <div className="graph-scroll-container" ref={scrollRef}>
                 {renderChart()}
               </div>
-              {type === 'food' && (
-                <div className="graph-legend">
-                  <span className="legend-item">
-                    <span className="legend-dot" style={{ background: '#f06292' }} />
-                    תמ״ל
-                  </span>
-                  <span className="legend-item">
-                    <span className="legend-dot" style={{ background: '#7c5cbf' }} />
-                    חלב אם
-                  </span>
-                </div>
-              )}
               <p className="graph-summary">{summary}</p>
             </>
           )}

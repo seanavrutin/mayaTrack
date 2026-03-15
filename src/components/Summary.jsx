@@ -90,7 +90,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
                     {formatTime(lastFeeding.startTime)} → {formatTime(lastFeeding.endTime)}
                   </span>
                 </div>
-                <span className="summary-row-ago">{timeAgo(lastFeeding.endTime)}</span>
+                <span className="summary-row-ago">{timeAgo(lastFeeding.startTime)}</span>
               </div>
               <div className="summary-row">
                 <span className="summary-row-icon">⏱</span>
