@@ -67,7 +67,7 @@ export async function getUserFamily(userId) {
 export function subscribeToFamily(familyId, callbacks) {
   const unsubs = [];
 
-  const cols = ['feedings', 'diapers', 'pumpings', 'vitaminD'];
+  const cols = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs'];
   cols.forEach((col) => {
     const ref = collection(db, 'families', familyId, col);
     const q = query(ref, orderBy('time', 'desc'));
@@ -77,6 +77,15 @@ export function subscribeToFamily(familyId, callbacks) {
     });
     unsubs.push(unsub);
   });
+
+  const kidsUnsub = onSnapshot(
+    collection(db, 'families', familyId, 'kids'),
+    (snap) => {
+      const kids = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callbacks.kids?.(kids);
+    },
+  );
+  unsubs.push(kidsUnsub);
 
   const settingsUnsub = onSnapshot(
     doc(db, 'families', familyId, 'settings', 'general'),
@@ -104,4 +113,19 @@ export async function updateSetting(familyId, key, value) {
   await updateDoc(doc(db, 'families', familyId, 'settings', 'general'), {
     [key]: value,
   });
+}
+
+export async function addKid(familyId, kidData) {
+  const colRef = collection(db, 'families', familyId, 'kids');
+  const docRef = doc(colRef);
+  await setDoc(docRef, { ...kidData, createdAt: serverTimestamp() });
+  return docRef.id;
+}
+
+export async function updateKid(familyId, kidId, kidData) {
+  await updateDoc(doc(db, 'families', familyId, 'kids', kidId), kidData);
+}
+
+export async function deleteKid(familyId, kidId) {
+  await deleteDoc(doc(db, 'families', familyId, 'kids', kidId));
 }

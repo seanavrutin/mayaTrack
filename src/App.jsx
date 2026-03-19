@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './services/firebase';
-import { getUserFamily, subscribeToFamily, addEntry, deleteEntry, updateSetting } from './services/firebaseApi';
+import { getUserFamily, subscribeToFamily, addEntry, deleteEntry, updateSetting, addKid, updateKid, deleteKid } from './services/firebaseApi';
 import EntryForm from './components/EntryForm';
 import Summary from './components/Summary';
 import SidePanel from './components/SidePanel';
+import SettingsModal from './components/SettingsModal';
 import LoginScreen from './components/LoginScreen';
 import FamilyScreen from './components/FamilyScreen';
 import useSwipe from './hooks/useSwipe';
@@ -20,14 +21,18 @@ function App() {
   const [diaperEntries, setDiaperEntries] = useState([]);
   const [pumpingEntries, setPumpingEntries] = useState([]);
   const [vitaminDEntries, setVitaminDEntries] = useState([]);
+  const [medicationLogs, setMedicationLogs] = useState([]);
+  const [kids, setKids] = useState([]);
   const [settings, setSettings] = useState({
     feedingIntervalMinutes: 180,
     pumpingIntervalMinutes: 180,
   });
   const [dataReady, setDataReady] = useState(false);
 
+  const [activeKidId, setActiveKidId] = useState(null);
   const [activeTab, setActiveTab] = useState('form');
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [slideDir, setSlideDir] = useState(null);
   const mainRef = useRef(null);
 
@@ -58,10 +63,12 @@ function App() {
       setDiaperEntries([]);
       setPumpingEntries([]);
       setVitaminDEntries([]);
+      setMedicationLogs([]);
+      setKids([]);
       return;
     }
 
-    const ready = { feedings: false, diapers: false, pumpings: false, vitaminD: false, settings: false };
+    const ready = { feedings: false, diapers: false, pumpings: false, vitaminD: false, medicationLogs: false, kids: false, settings: false };
     function checkReady() {
       if (Object.values(ready).every(Boolean)) setDataReady(true);
     }
@@ -71,16 +78,39 @@ function App() {
       diapers: (entries) => { setDiaperEntries(entries); ready.diapers = true; checkReady(); },
       pumpings: (entries) => { setPumpingEntries(entries); ready.pumpings = true; checkReady(); },
       vitaminD: (entries) => { setVitaminDEntries(entries); ready.vitaminD = true; checkReady(); },
+      medicationLogs: (entries) => { setMedicationLogs(entries); ready.medicationLogs = true; checkReady(); },
+      kids: (k) => { setKids(k); ready.kids = true; checkReady(); },
       settings: (s) => {
         setSettings({
-          feedingIntervalMinutes: s.feedingIntervalMinutes || 180,
-          pumpingIntervalMinutes: s.pumpingIntervalMinutes || 180,
+          feedingIntervalMinutes: s.feedingIntervalMinutes ?? 180,
+          pumpingIntervalMinutes: s.pumpingIntervalMinutes ?? 180,
         });
         ready.settings = true;
         checkReady();
       },
     });
   }, [family?.familyId]);
+
+  useEffect(() => {
+    if (kids.length > 0 && (!activeKidId || !kids.find(k => k.id === activeKidId))) {
+      setActiveKidId(kids[0].id);
+    }
+  }, [kids, activeKidId]);
+
+  const activeKid = kids.find(k => k.id === activeKidId) || null;
+
+  const kidFeedingEntries = feedingEntries.filter(e => e.kidId === activeKidId || !e.kidId);
+  const kidDiaperEntries = diaperEntries.filter(e => e.kidId === activeKidId || !e.kidId);
+
+  const legacyVitaminDLogs = vitaminDEntries.map(e => ({
+    medicationName: 'ויטמין D',
+    kidId: activeKidId,
+    time: e.time,
+  }));
+  const kidMedicationLogs = [
+    ...medicationLogs.filter(e => e.kidId === activeKidId),
+    ...legacyVitaminDLogs,
+  ];
 
   const handleAddEntry = async (collectionName, entry) => {
     await addEntry(family.familyId, collectionName, entry);
@@ -96,6 +126,18 @@ function App() {
         updateSetting(family.familyId, key, value).catch(console.error);
       }
     });
+  };
+
+  const handleAddKid = async (kidData) => {
+    await addKid(family.familyId, kidData);
+  };
+
+  const handleUpdateKid = async (kidId, kidData) => {
+    await updateKid(family.familyId, kidId, kidData);
+  };
+
+  const handleDeleteKid = async (kidId) => {
+    await deleteKid(family.familyId, kidId);
   };
 
   const switchTab = useCallback((tab, dir) => {
@@ -149,6 +191,20 @@ function App() {
         </div>
       </header>
 
+      {kids.length > 1 && (
+        <div className="kid-switcher">
+          {kids.map((kid) => (
+            <button
+              key={kid.id}
+              className={`kid-switcher-btn ${kid.id === activeKidId ? 'active' : ''}`}
+              onClick={() => setActiveKidId(kid.id)}
+            >
+              {kid.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <main
         className={`app-main${slideDir ? ` ${slideDir}` : ''}`}
         ref={mainRef}
@@ -156,17 +212,31 @@ function App() {
       >
         {activeTab === 'form' ? (
           <EntryForm
-            onAddFeeding={(e) => handleAddEntry('feedings', e)}
-            onAddDiaper={(e) => handleAddEntry('diapers', e)}
+            onAddFeeding={(e) => handleAddEntry('feedings', { ...e, kidId: activeKidId })}
+            onAddDiaper={(e) => handleAddEntry('diapers', { ...e, kidId: activeKidId })}
             onAddPumping={(e) => handleAddEntry('pumpings', e)}
-            onAddVitaminD={(e) => handleAddEntry('vitaminD', e)}
+            medications={activeKid?.medications || []}
+            medicationLogs={kidMedicationLogs}
+            onLogMedication={(medName) => handleAddEntry('medicationLogs', {
+              id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+              kidId: activeKidId,
+              medicationName: medName,
+              time: new Date().toISOString(),
+            })}
           />
         ) : (
           <Summary
-            feedingEntries={feedingEntries}
-            diaperEntries={diaperEntries}
+            feedingEntries={kidFeedingEntries}
+            diaperEntries={kidDiaperEntries}
             pumpingEntries={pumpingEntries}
-            vitaminDEntries={vitaminDEntries}
+            medications={activeKid?.medications || []}
+            medicationLogs={kidMedicationLogs}
+            onLogMedication={(medName) => handleAddEntry('medicationLogs', {
+              id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+              kidId: activeKidId,
+              medicationName: medName,
+              time: new Date().toISOString(),
+            })}
             settings={settings}
             loading={!dataReady}
           />
@@ -176,18 +246,30 @@ function App() {
       <SidePanel
         isOpen={sidePanelOpen}
         onClose={() => setSidePanelOpen(false)}
-        feedingEntries={feedingEntries}
-        diaperEntries={diaperEntries}
+        feedingEntries={kidFeedingEntries}
+        diaperEntries={kidDiaperEntries}
         pumpingEntries={pumpingEntries}
         vitaminDEntries={vitaminDEntries}
-        settings={settings}
-        onSettingsChange={handleSettingsChange}
         onDeleteFeeding={(id) => handleDeleteEntry('feedings', id)}
         onDeleteDiaper={(id) => handleDeleteEntry('diapers', id)}
         onDeletePumping={(id) => handleDeleteEntry('pumpings', id)}
         onDeleteVitaminD={(id) => handleDeleteEntry('vitaminD', id)}
         family={family}
+        activeKid={activeKid}
+        onOpenSettings={() => setSettingsModalOpen(true)}
+      />
+
+      <SettingsModal
+        isOpen={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        family={family}
         user={user}
+        settings={settings}
+        onSettingsChange={handleSettingsChange}
+        kids={kids}
+        onAddKid={handleAddKid}
+        onUpdateKid={handleUpdateKid}
+        onDeleteKid={handleDeleteKid}
       />
     </div>
   );

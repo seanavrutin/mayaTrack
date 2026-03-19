@@ -32,7 +32,16 @@ function useSaveStatus() {
   return { setStatus, getStatus };
 }
 
-export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onAddVitaminD }) {
+function isToday(isoString) {
+  if (!isoString) return false;
+  const d = new Date(isoString);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+}
+
+export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, medications = [], medicationLogs = [], onLogMedication }) {
   const [time, setTime] = useState(() => new Date());
   const [bottleType, setBottleType] = useState('formula');
   const [bottleAmount, setBottleAmount] = useState(0);
@@ -285,13 +294,13 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
     });
   };
 
-  const handleSaveVitaminD = () => {
-    const entry = {
-      id: generateId(),
-      time: new Date().toISOString(),
-    };
-    doSave('vitaminD', onAddVitaminD, entry, null);
-  };
+  const todayMedLogs = medicationLogs.filter(e => isToday(e.time));
+
+  const getMedTakenToday = (medName) =>
+    todayMedLogs.filter(e => e.medicationName === medName).length;
+
+  const allMedsDone = medications.length > 0 &&
+    medications.every(m => getMedTakenToday(m.name) >= m.timesPerDay);
 
   const [openSection, setOpenSection] = useState(null);
 
@@ -300,7 +309,7 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
     { key: 'breastfeeding', emoji: '🤱', label: 'הנקה' },
     { key: 'diaper', emoji: '🚼', label: 'טיטול' },
     { key: 'pumping', emoji: '🧴', label: 'שאיבה' },
-    { key: 'vitaminD', emoji: '☀️', label: 'ויטמין D' },
+    { key: 'medications', emoji: '💊', label: 'תרופות' },
   ];
 
   const wrappedSave = (saveFn) => {
@@ -542,15 +551,33 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, onA
         </div>
       )}
 
-      {openSection === 'vitaminD' && (
+      {openSection === 'medications' && (
         <div className="card section-expanded">
-          <div className="card-title">☀️ ויטמין D</div>
-          <SaveButton
-            status={getStatus('vitaminD')}
-            onClick={wrappedSave(handleSaveVitaminD)}
-            onRetry={() => handleRetry('vitaminD')}
-            label="קיבלה ויטמין D"
-          />
+          <div className="card-title">💊 תרופות</div>
+          {medications.length === 0 ? (
+            <p className="no-data">אין תרופות מוגדרות — הוסיפו בהגדרות ⚙️</p>
+          ) : (
+            <div className="med-log-list">
+              {medications.map((med) => {
+                const taken = getMedTakenToday(med.name);
+                const done = taken >= med.timesPerDay;
+                return (
+                  <button
+                    key={med.name}
+                    className={`med-log-row ${done ? 'med-done' : ''}`}
+                    onClick={() => !done && onLogMedication(med.name)}
+                    disabled={done}
+                  >
+                    <span className="med-log-icon">{done ? '✅' : '💊'}</span>
+                    <span className="med-log-name">{med.name}</span>
+                    <span className={`med-log-counter ${done ? 'counter-done' : ''}`}>
+                      {taken}/{med.timesPerDay}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

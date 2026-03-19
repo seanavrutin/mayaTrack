@@ -46,7 +46,7 @@ function isToday(isoString) {
     d.getDate() === now.getDate();
 }
 
-export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, vitaminDEntries = [], settings, loading }) {
+export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, medications = [], medicationLogs = [], onLogMedication, settings, loading }) {
   if (loading) {
     return (
       <div className="loading-screen">
@@ -60,7 +60,12 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
   const lastPumping = pumpingEntries[0] ?? null;
   const lastPeeDiaper = diaperEntries.find((e) => e.pee) ?? null;
   const lastPoopDiaper = diaperEntries.find((e) => e.poop) ?? null;
-  const vitaminDToday = vitaminDEntries.some((e) => isToday(e.time));
+
+  const todayMedLogs = medicationLogs.filter(e => isToday(e.time));
+  const getMedTakenToday = (medName) =>
+    todayMedLogs.filter(e => e.medicationName === medName).length;
+  const anyMedMissing = medications.length > 0 &&
+    medications.some(m => getMedTakenToday(m.name) < m.timesPerDay);
 
   const nextFeedingTime = lastFeeding
     ? addMinutesToISO(lastFeeding.time, settings.feedingIntervalMinutes)
@@ -129,7 +134,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
       </div>
 
       {/* Pumping card */}
-      <div className={`summary-card ${pumpingOverdue ? 'overdue' : ''}`}>
+      <div className={`summary-card ${settings.pumpingIntervalMinutes > 0 && pumpingOverdue ? 'overdue' : ''}`}>
         <div className="summary-card-icon">🧴</div>
         <div className="summary-card-content">
           <h3 className="summary-card-title">שאיבה</h3>
@@ -141,18 +146,20 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
             </div>
             <span className="summary-row-ago">{timeAgo(lastPumping?.time)}</span>
           </div>
-          <div className="summary-row">
-            <span className="summary-row-icon">{pumpingOverdue ? '🔴' : '⏰'}</span>
-            <div className="summary-row-text">
-              <span className="summary-row-label">הבאה בשעה</span>
-              <span className={`summary-row-time ${pumpingOverdue ? 'warning' : ''}`}>
-                {formatTime(nextPumpingTime)}
+          {settings.pumpingIntervalMinutes > 0 && (
+            <div className="summary-row">
+              <span className="summary-row-icon">{pumpingOverdue ? '🔴' : '⏰'}</span>
+              <div className="summary-row-text">
+                <span className="summary-row-label">הבאה בשעה</span>
+                <span className={`summary-row-time ${pumpingOverdue ? 'warning' : ''}`}>
+                  {formatTime(nextPumpingTime)}
+                </span>
+              </div>
+              <span className={`summary-row-countdown ${pumpingOverdue ? 'warning' : ''}`}>
+                {timeUntil(nextPumpingTime)}
               </span>
             </div>
-            <span className={`summary-row-countdown ${pumpingOverdue ? 'warning' : ''}`}>
-              {timeUntil(nextPumpingTime)}
-            </span>
-          </div>
+          )}
         </div>
       </div>
 
@@ -180,21 +187,36 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
         </div>
       </div>
 
-      {/* Vitamin D card */}
-      <div className={`summary-card ${!vitaminDToday ? 'overdue' : ''}`}>
-        <div className="summary-card-icon">☀️</div>
-        <div className="summary-card-content">
-          <h3 className="summary-card-title">ויטמין D</h3>
-          <div className="summary-row">
-            <span className="summary-row-icon">{vitaminDToday ? '✅' : '❌'}</span>
-            <div className="summary-row-text">
-              <span className={`summary-row-label ${!vitaminDToday ? 'warning' : ''}`}>
-                {vitaminDToday ? 'קיבלה היום' : 'עדיין לא קיבלה היום'}
-              </span>
-            </div>
+      {/* Medications card */}
+      {medications.length > 0 && (
+        <div className={`summary-card ${anyMedMissing ? 'overdue' : ''}`}>
+          <div className="summary-card-icon">💊</div>
+          <div className="summary-card-content">
+            <h3 className="summary-card-title">תרופות</h3>
+            {medications.map((med) => {
+              const taken = getMedTakenToday(med.name);
+              const done = taken >= med.timesPerDay;
+              return (
+                <div key={med.name} className="summary-row summary-med-row">
+                  <span className="summary-row-icon">{done ? '✅' : '❌'}</span>
+                  <div className="summary-row-text">
+                    <span className={`summary-row-label ${!done ? 'warning' : ''}`}>
+                      {med.name}
+                    </span>
+                  </div>
+                  <button
+                    className={`med-counter-btn ${done ? 'counter-done' : ''}`}
+                    onClick={() => !done && onLogMedication(med.name)}
+                    disabled={done}
+                  >
+                    {taken}/{med.timesPerDay}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

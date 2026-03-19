@@ -26,24 +26,16 @@ export default function SidePanel({
   diaperEntries,
   pumpingEntries,
   vitaminDEntries = [],
-  settings,
-  onSettingsChange,
   onDeleteFeeding,
   onDeleteDiaper,
   onDeletePumping,
   onDeleteVitaminD,
   family,
-  user,
+  activeKid,
+  onOpenSettings,
 }) {
   const [activeTable, setActiveTable] = useState(null);
   const [activeGraph, setActiveGraph] = useState(null);
-
-  const handleSetting = (key, value) => {
-    const num = Number(value);
-    if (!isNaN(num) && num > 0) {
-      onSettingsChange({ ...settings, [key]: num });
-    }
-  };
 
   return (
     <>
@@ -54,51 +46,14 @@ export default function SidePanel({
       />
       <div className={`side-panel ${isOpen ? 'open' : ''}`}>
         <div className="side-panel-header">
-          <h2>{family ? `משפחת ${family.name}` : 'הגדרות וטבלאות'}</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <h2>{activeKid && family ? `${activeKid.name} ${family.name}` : family ? `משפחת ${family.name}` : 'טבלאות'}</h2>
+          <div className="side-panel-header-buttons">
+            <button className="settings-icon-btn" onClick={onOpenSettings} title="הגדרות">⚙️</button>
+            <button className="close-btn" onClick={onClose}>✕</button>
+          </div>
         </div>
 
         <div className="side-panel-content">
-          {family && (
-            <div className="family-info-section">
-              <div className="family-info-row">
-                <span className="setting-label">קוד הצטרפות למשפחה:</span>
-                <span className="family-code-badge">{family.code}</span>
-              </div>
-              {user && (
-                <div className="family-info-row">
-                  <span className="setting-label family-user-email">{user.email}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="settings-section">
-            <h3>⚙️ הגדרות</h3>
-            <div className="setting-row">
-              <span className="setting-label">מרווח האכלה (דקות)</span>
-              <input
-                className="setting-input"
-                type="number"
-                value={settings.feedingIntervalMinutes}
-                onChange={(e) =>
-                  handleSetting('feedingIntervalMinutes', e.target.value)
-                }
-              />
-            </div>
-            <div className="setting-row">
-              <span className="setting-label">מרווח שאיבה (דקות)</span>
-              <input
-                className="setting-input"
-                type="number"
-                value={settings.pumpingIntervalMinutes}
-                onChange={(e) =>
-                  handleSetting('pumpingIntervalMinutes', e.target.value)
-                }
-              />
-            </div>
-          </div>
-
           <div className="table-buttons">
             <h3>📋 טבלאות</h3>
             <button className="table-btn" onClick={() => setActiveTable('feeding')}>

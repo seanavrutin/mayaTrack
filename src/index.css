@@ -114,6 +114,42 @@ input {
   color: var(--primary);
 }
 
+/* ── Kid Switcher ── */
+
+.kid-switcher {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: var(--primary-light);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 68px;
+  z-index: 9;
+}
+
+.kid-switcher-btn {
+  padding: 6px 20px;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--primary-dark);
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.kid-switcher-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary-dark);
+}
+
+.kid-switcher-btn:not(.active):hover {
+  background: rgba(124, 92, 191, 0.1);
+  border-color: var(--primary);
+}
+
 /* ── Main ── */
 
 .app-main {
@@ -787,6 +823,107 @@ input {
   40% { transform: translateX(6px); }
   60% { transform: translateX(-4px); }
   80% { transform: translateX(4px); }
+}
+
+/* ── Medication Log List (EntryForm) ── */
+
+.med-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.med-log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--card-bg);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border);
+  transition: all 0.2s;
+  width: 100%;
+  text-align: right;
+}
+
+.med-log-row:not(:disabled):hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.med-log-row:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.med-log-row.med-done {
+  opacity: 0.6;
+  border-color: var(--success);
+  background: rgba(102, 187, 106, 0.08);
+}
+
+.med-log-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.med-log-name {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.med-log-counter {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 2px 12px;
+  border-radius: 20px;
+  min-width: 48px;
+  text-align: center;
+  direction: ltr;
+}
+
+.med-log-counter.counter-done {
+  background: rgba(102, 187, 106, 0.15);
+  color: var(--success);
+}
+
+/* ── Medication Counter Button (Summary) ── */
+
+.med-counter-btn {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 4px 12px;
+  border-radius: 20px;
+  min-width: 44px;
+  text-align: center;
+  direction: ltr;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.med-counter-btn:not(:disabled):hover {
+  background: var(--primary);
+  color: white;
+}
+
+.med-counter-btn:not(:disabled):active {
+  transform: scale(0.92);
+}
+
+.med-counter-btn.counter-done {
+  background: rgba(102, 187, 106, 0.15);
+  color: var(--success);
+  cursor: default;
+}
+
+.summary-med-row {
+  cursor: default;
 }
 
 /* ── Summary Cards ── */
@@ -1643,6 +1780,304 @@ input {
 .logout-btn:hover {
   background: var(--secondary-light);
   border-color: var(--secondary);
+}
+
+/* ── Side Panel Header Buttons ── */
+
+.side-panel-header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-icon-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.settings-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Settings Modal ── */
+
+.settings-modal {
+  max-height: 85vh;
+}
+
+.settings-modal-section {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-modal-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.settings-modal-section h3 {
+  font-size: 0.95rem;
+  color: var(--primary-dark);
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+/* ── Kid Card ── */
+
+.kid-card {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+}
+
+.kid-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.kid-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.kid-delete-btn {
+  background: var(--secondary-light);
+  color: var(--secondary);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.kid-delete-btn:hover {
+  background: var(--secondary);
+  color: white;
+}
+
+/* ── Medications List ── */
+
+.kid-meds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kid-meds-empty {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 6px 0;
+}
+
+.med-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--card-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.med-name {
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.med-times {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.med-times-input {
+  width: 44px;
+  padding: 4px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  direction: ltr;
+}
+
+.med-times-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.med-times-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.med-delete-btn {
+  background: var(--secondary-light);
+  color: var(--secondary);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.med-delete-btn:hover {
+  background: var(--secondary);
+  color: white;
+}
+
+/* ── Add Medication Form ── */
+
+.add-med-btn {
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.85rem;
+  border: 2px dashed var(--border);
+  transition: all 0.2s;
+}
+
+.add-med-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.add-med-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--card-bg);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--primary);
+}
+
+.add-med-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.add-med-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.add-med-times-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.add-med-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.add-med-confirm {
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.add-med-confirm:hover {
+  background: var(--primary-dark);
+}
+
+.add-med-cancel {
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+
+.add-med-cancel:hover {
+  background: var(--secondary-light);
+  color: var(--secondary);
+}
+
+/* ── Add Kid Row ── */
+
+.add-kid-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.add-kid-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.add-kid-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.add-kid-btn {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.add-kid-btn:hover {
+  background: var(--primary-dark);
+}
+
+.add-kid-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ── Responsive ── */
