@@ -143,6 +143,11 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
             <div className="summary-row-text">
               <span className="summary-row-label">אחרונה</span>
               <span className="summary-row-time">{formatTime(lastPumping?.time)}</span>
+              {lastPumping?.side && (
+                <span className="summary-row-label">
+                  ({lastPumping.side === 'right' ? 'ימין' : lastPumping.side === 'left' ? 'שמאל' : 'שתיהן'})
+                </span>
+              )}
             </div>
             <span className="summary-row-ago">{timeAgo(lastPumping?.time)}</span>
           </div>

@@ -251,11 +251,11 @@ function App() {
         feedingEntries={kidFeedingEntries}
         diaperEntries={kidDiaperEntries}
         pumpingEntries={pumpingEntries}
-        vitaminDEntries={vitaminDEntries}
+        medicationLogs={kidMedicationLogs}
         onDeleteFeeding={(id) => handleDeleteEntry('feedings', id)}
         onDeleteDiaper={(id) => handleDeleteEntry('diapers', id)}
         onDeletePumping={(id) => handleDeleteEntry('pumpings', id)}
-        onDeleteVitaminD={(id) => handleDeleteEntry('vitaminD', id)}
+        onDeleteMedicationLog={(id) => handleDeleteEntry('medicationLogs', id)}
         family={family}
         activeKid={activeKid}
         onOpenSettings={() => setSettingsModalOpen(true)}

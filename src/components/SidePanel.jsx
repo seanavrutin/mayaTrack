@@ -16,7 +16,7 @@ const TABLE_TITLES = {
   feeding: '🍼 טבלת אוכל',
   diaper: '🚼 טבלת טיטול',
   pumping: '🧴 טבלת שאיבה',
-  vitaminD: '☀️ טבלת ויטמין D',
+  medications: '💊 טבלת תרופות',
 };
 
 export default function SidePanel({
@@ -25,21 +25,22 @@ export default function SidePanel({
   feedingEntries,
   diaperEntries,
   pumpingEntries,
-  vitaminDEntries = [],
+  medicationLogs = [],
   onDeleteFeeding,
   onDeleteDiaper,
   onDeletePumping,
-  onDeleteVitaminD,
+  onDeleteMedicationLog,
   family,
   activeKid,
   onOpenSettings,
 }) {
   const [activeTable, setActiveTable] = useState(null);
   const [activeGraph, setActiveGraph] = useState(null);
+  const [tablesOpen, setTablesOpen] = useState(false);
+  const [graphsOpen, setGraphsOpen] = useState(false);
 
   return (
     <>
-      {/* Side panel overlay */}
       <div
         className={`side-panel-overlay ${isOpen ? 'open' : ''}`}
         onClick={onClose}
@@ -54,37 +55,31 @@ export default function SidePanel({
         </div>
 
         <div className="side-panel-content">
-          <div className="table-buttons">
-            <h3>📋 טבלאות</h3>
-            <button className="table-btn" onClick={() => setActiveTable('feeding')}>
-              🍼 טבלת אוכל
-            </button>
-            <button className="table-btn" onClick={() => setActiveTable('diaper')}>
-              🚼 טבלת טיטול
-            </button>
-            <button className="table-btn" onClick={() => setActiveTable('pumping')}>
-              🧴 טבלת שאיבה
-            </button>
-            <button className="table-btn" onClick={() => setActiveTable('vitaminD')}>
-              ☀️ טבלת ויטמין D
-            </button>
-          </div>
+          <button className="sp-section-toggle" onClick={() => setTablesOpen(!tablesOpen)}>
+            <span>📋 טבלאות</span>
+            <span className={`sp-chevron ${tablesOpen ? 'open' : ''}`}>◀</span>
+          </button>
+          {tablesOpen && (
+            <div className="sp-section-items">
+              <button className="table-btn" onClick={() => setActiveTable('feeding')}>🍼 אוכל</button>
+              <button className="table-btn" onClick={() => setActiveTable('diaper')}>🚼 טיטול</button>
+              <button className="table-btn" onClick={() => setActiveTable('pumping')}>🧴 שאיבה</button>
+              <button className="table-btn" onClick={() => setActiveTable('medications')}>💊 תרופות</button>
+            </div>
+          )}
 
-          <div className="table-buttons">
-            <h3>📊 גרפים</h3>
-            <button className="graph-btn" onClick={() => setActiveGraph('pee')}>
-              💧 גרף פיפי
-            </button>
-            <button className="graph-btn" onClick={() => setActiveGraph('poop')}>
-              💩 גרף קקי
-            </button>
-            <button className="graph-btn" onClick={() => setActiveGraph('food')}>
-              🍼 גרף אוכל
-            </button>
-            <button className="graph-btn" onClick={() => setActiveGraph('pumping')}>
-              🧴 גרף שאיבה
-            </button>
-          </div>
+          <button className="sp-section-toggle" onClick={() => setGraphsOpen(!graphsOpen)}>
+            <span>📊 גרפים</span>
+            <span className={`sp-chevron ${graphsOpen ? 'open' : ''}`}>◀</span>
+          </button>
+          {graphsOpen && (
+            <div className="sp-section-items">
+              <button className="graph-btn" onClick={() => setActiveGraph('pee')}>💧 פיפי</button>
+              <button className="graph-btn" onClick={() => setActiveGraph('poop')}>💩 קקי</button>
+              <button className="graph-btn" onClick={() => setActiveGraph('food')}>🍼 אוכל</button>
+              <button className="graph-btn" onClick={() => setActiveGraph('pumping')}>🧴 שאיבה</button>
+            </div>
+          )}
 
           <div className="logout-section">
             <button className="logout-btn" onClick={logOut}>
@@ -94,7 +89,6 @@ export default function SidePanel({
         </div>
       </div>
 
-      {/* Graph popup modal */}
       {activeGraph && (
         <GraphModal
           type={activeGraph}
@@ -105,7 +99,6 @@ export default function SidePanel({
         />
       )}
 
-      {/* Table popup modal */}
       {activeTable && (
         <>
           <div className="modal-overlay" onClick={() => setActiveTable(null)} />
@@ -191,6 +184,7 @@ export default function SidePanel({
                         <th>תאריך</th>
                         <th>שעה</th>
                         <th>משך (דקות)</th>
+                        <th>צד</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -200,6 +194,7 @@ export default function SidePanel({
                           <td>{fmtDate(e.time)}</td>
                           <td>{fmt(e.time)}</td>
                           <td>{e.durationMinutes}׳</td>
+                          <td>{e.side === 'right' ? 'ימין' : e.side === 'left' ? 'שמאל' : e.side === 'both' ? 'שתיהן' : '—'}</td>
                           <td>
                             <button className="delete-btn" onClick={() => onDeletePumping(e.id)}>✕</button>
                           </td>
@@ -210,8 +205,8 @@ export default function SidePanel({
                 )
               )}
 
-              {activeTable === 'vitaminD' && (
-                vitaminDEntries.length === 0 ? (
+              {activeTable === 'medications' && (
+                medicationLogs.length === 0 ? (
                   <p className="no-data">אין נתונים עדיין</p>
                 ) : (
                   <table className="data-table">
@@ -219,16 +214,18 @@ export default function SidePanel({
                       <tr>
                         <th>תאריך</th>
                         <th>שעה</th>
+                        <th>תרופה</th>
                         <th></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {vitaminDEntries.map((e) => (
+                      {medicationLogs.map((e) => (
                         <tr key={e.id}>
                           <td>{fmtDate(e.time)}</td>
                           <td>{fmt(e.time)}</td>
+                          <td>{e.medicationName}</td>
                           <td>
-                            <button className="delete-btn" onClick={() => onDeleteVitaminD(e.id)}>✕</button>
+                            <button className="delete-btn" onClick={() => onDeleteMedicationLog(e.id)}>✕</button>
                           </td>
                         </tr>
                       ))}

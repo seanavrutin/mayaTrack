@@ -53,6 +53,27 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
   const [poop, setPoop] = useState(false);
   const [emptyDiaper, setEmptyDiaper] = useState(false);
   const [pumpingMin, setPumpingMin] = useState(0);
+  const [pumpMode, setPumpMode] = useState('timer');
+
+  // Pumping timer state — restored from localStorage on mount
+  const PUMP_STORAGE_KEY = 'pump-timer-state';
+
+  const loadSavedPumpState = () => {
+    try {
+      const raw = localStorage.getItem(PUMP_STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch { return null; }
+  };
+
+  const savedPump = useRef(loadSavedPumpState());
+
+  const [pumpSide, setPumpSide] = useState(savedPump.current?.pumpSide ?? 'both');
+  const [pumpTimerRunning, setPumpTimerRunning] = useState(savedPump.current?.pumpTimerRunning ?? false);
+  const [pumpTimerStart, setPumpTimerStart] = useState(savedPump.current?.pumpTimerStart ?? null);
+  const [pumpPausedElapsed, setPumpPausedElapsed] = useState(savedPump.current?.pumpPausedElapsed ?? 0);
+  const [pumpCurrentElapsed, setPumpCurrentElapsed] = useState(0);
+  const [pumpSessionStart, setPumpSessionStart] = useState(savedPump.current?.pumpSessionStart ?? null);
 
   // Breastfeeding timer state — restored from localStorage on mount
   const BF_STORAGE_KEY = 'bf-timer-state';
@@ -90,6 +111,14 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
   }, [timerRunning, timerStart, pausedElapsed]);
 
   useEffect(() => {
+    if (!pumpTimerRunning || !pumpTimerStart) return;
+    const interval = setInterval(() => {
+      setPumpCurrentElapsed(pumpPausedElapsed + Math.floor((Date.now() - pumpTimerStart) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [pumpTimerRunning, pumpTimerStart, pumpPausedElapsed]);
+
+  useEffect(() => {
     const hasActivity = activeBreast || rightSessions.length > 0 || leftSessions.length > 0;
     if (hasActivity) {
       localStorage.setItem(BF_STORAGE_KEY, JSON.stringify({
@@ -104,6 +133,18 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
   }, [activeBreast, timerRunning, timerPaused, timerStart,
       pausedElapsed, rightSessions, leftSessions,
       bfSessionStart, firstBreast]);
+
+  useEffect(() => {
+    const hasActivity = pumpTimerRunning || pumpPausedElapsed > 0 || pumpSessionStart;
+    if (hasActivity) {
+      localStorage.setItem(PUMP_STORAGE_KEY, JSON.stringify({
+        pumpSide, pumpTimerRunning,
+        pumpTimerStart, pumpPausedElapsed, pumpSessionStart,
+      }));
+    } else {
+      localStorage.removeItem(PUMP_STORAGE_KEY);
+    }
+  }, [pumpSide, pumpTimerRunning, pumpTimerStart, pumpPausedElapsed, pumpSessionStart]);
 
   const doSave = async (section, addFn, entry, resetFn) => {
     if (getStatus(section) === 'saving') return;
@@ -244,7 +285,7 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
       const entry = {
         id: generateId(),
         type: 'breastfeeding',
-        time: time.toISOString(),
+        time: savedStartTime,
         formula: 0,
         pumpedMilk: 0,
         breastfeedingMinutes: totalMinutes,
@@ -296,16 +337,72 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
     });
   };
 
+  const resetPumpTimer = () => {
+    setPumpTimerRunning(false);
+    setPumpTimerStart(null);
+    setPumpPausedElapsed(0);
+    setPumpCurrentElapsed(0);
+    setPumpSessionStart(null);
+    localStorage.removeItem(PUMP_STORAGE_KEY);
+  };
+
+  const getPumpElapsedSeconds = () => {
+    if (pumpTimerRunning && pumpTimerStart) {
+      return pumpPausedElapsed + Math.floor((Date.now() - pumpTimerStart) / 1000);
+    }
+    return pumpPausedElapsed;
+  };
+
+  const handlePumpTimerStart = () => {
+    if (!pumpSessionStart) {
+      setPumpSessionStart(new Date().toISOString());
+    }
+    setPumpTimerRunning(true);
+    setPumpTimerStart(Date.now());
+  };
+
+  const handlePumpTimerStop = () => {
+    if (pumpTimerRunning && pumpTimerStart) {
+      setPumpPausedElapsed(pumpPausedElapsed + Math.floor((Date.now() - pumpTimerStart) / 1000));
+    }
+    setPumpTimerRunning(false);
+    setPumpTimerStart(null);
+  };
+
+  const hasPumpTimerActivity = pumpTimerRunning || pumpPausedElapsed > 0;
+  const pumpDisplaySeconds = pumpTimerRunning ? pumpCurrentElapsed : pumpPausedElapsed;
+
   const handleSavePumping = () => {
-    const entry = {
-      id: generateId(),
-      time: time.toISOString(),
-      durationMinutes: pumpingMin,
-    };
-    doSave('pumping', onAddPumping, entry, () => {
-      setPumpingMin(0);
-      setTime(new Date());
-    });
+    if (pumpMode === 'timer' && hasPumpTimerActivity) {
+      const totalSeconds = getPumpElapsedSeconds();
+      const savedStartTime = pumpSessionStart || time.toISOString();
+      const endTime = new Date().toISOString();
+      const totalMinutes = Math.round(totalSeconds / 60);
+
+      const entry = {
+        id: generateId(),
+        time: time.toISOString(),
+        durationMinutes: totalMinutes,
+        side: pumpSide,
+        startTime: savedStartTime,
+        endTime,
+      };
+      doSave('pumping', onAddPumping, entry, () => {
+        resetPumpTimer();
+        setTime(new Date());
+      });
+    } else {
+      const entry = {
+        id: generateId(),
+        time: time.toISOString(),
+        durationMinutes: pumpingMin,
+        side: pumpSide,
+      };
+      doSave('pumping', onAddPumping, entry, () => {
+        setPumpingMin(0);
+        setTime(new Date());
+      });
+    }
   };
 
   const todayMedLogs = medicationLogs.filter(e => isToday(e.time));
@@ -405,18 +502,21 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
 
       {openSection === 'breastfeeding' && (
         <div className="card section-expanded">
-          <div className="card-title">🤱 הנקה</div>
-          <div className="section-fields">
+          <div className="card-title">
+            🤱 הנקה
             <button
               type="button"
               className="bf-mode-toggle"
               onClick={() => setBfMode(bfMode === 'timer' ? 'manual' : 'timer')}
             >
-              {bfMode === 'timer' ? '✏️ הזנה ידנית' : '⏱ שעון עצר'}
+              {bfMode === 'timer' ? '✏️ ידני' : '⏱ שעון'}
             </button>
+          </div>
+          <div className="section-fields">
 
             {bfMode === 'manual' ? (
               <div className="bf-manual">
+                <div className="bf-breast-label">הנקה התחילה משד:</div>
                 <div className="bf-manual-breast-toggle">
                   <button
                     type="button"
@@ -460,6 +560,7 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
               </div>
             ) : (
             <div className="bf-timer">
+              <div className="bf-breast-label">הנקה התחילה משד:</div>
               <div className="bf-breasts">
                 <div className="bf-breast-col">
                   <button
@@ -559,20 +660,87 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
 
       {openSection === 'pumping' && (
         <div className="card section-expanded">
-          <div className="card-title">🧴 שאיבה</div>
-          <div className="section-fields">
-            <NumberStepper label="זמן שאיבה (דקות)" value={pumpingMin} onChange={setPumpingMin} step={1} />
-            <div className="quick-picks">
-              <button type="button" className={`quick-pick ${pumpingMin === 15 ? 'selected' : ''}`} onClick={() => setPumpingMin(15)}>15</button>
-              <button type="button" className={`quick-pick ${pumpingMin === 35 ? 'selected' : ''}`} onClick={() => setPumpingMin(35)}>35</button>
-            </div>
+          <div className="card-title">
+            🧴 שאיבה
+            <button
+              type="button"
+              className="bf-mode-toggle"
+              onClick={() => setPumpMode(pumpMode === 'timer' ? 'manual' : 'timer')}
+            >
+              {pumpMode === 'timer' ? '✏️ ידני' : '⏱ שעון'}
+            </button>
           </div>
-          <SaveButton
-            status={getStatus('pumping')}
-            onClick={wrappedSave(handleSavePumping)}
-            onRetry={() => handleRetry('pumping')}
-            label="שמור שאיבה"
-          />
+          <div className="section-fields">
+
+            <div className="pump-side-toggle">
+              <button
+                type="button"
+                className={`bf-breast-btn ${pumpSide === 'right' ? 'active' : ''}`}
+                onClick={() => setPumpSide('right')}
+              >
+                ימין
+              </button>
+              <button
+                type="button"
+                className={`bf-breast-btn ${pumpSide === 'both' ? 'active' : ''}`}
+                onClick={() => setPumpSide('both')}
+              >
+                שתיהן
+              </button>
+              <button
+                type="button"
+                className={`bf-breast-btn ${pumpSide === 'left' ? 'active' : ''}`}
+                onClick={() => setPumpSide('left')}
+              >
+                שמאל
+              </button>
+            </div>
+
+            {pumpMode === 'manual' ? (
+              <>
+                <NumberStepper label="זמן שאיבה (דקות)" value={pumpingMin} onChange={setPumpingMin} step={1} />
+                <div className="quick-picks">
+                  <button type="button" className={`quick-pick ${pumpingMin === 15 ? 'selected' : ''}`} onClick={() => setPumpingMin(15)}>15</button>
+                  <button type="button" className={`quick-pick ${pumpingMin === 35 ? 'selected' : ''}`} onClick={() => setPumpingMin(35)}>35</button>
+                </div>
+              </>
+            ) : (
+              <div className="bf-timer">
+                <div className="pump-timer-display">
+                  {formatDuration(pumpDisplaySeconds)}
+                </div>
+
+                {!pumpTimerRunning && pumpPausedElapsed === 0 && (
+                  <button type="button" className="bf-timer-btn start" onClick={handlePumpTimerStart}>
+                    ▶ התחל
+                  </button>
+                )}
+                {pumpTimerRunning && (
+                  <button type="button" className="bf-timer-btn stop" onClick={handlePumpTimerStop}>
+                    ⏸ עצור
+                  </button>
+                )}
+                {!pumpTimerRunning && pumpPausedElapsed > 0 && (
+                  <button type="button" className="bf-timer-btn start" onClick={handlePumpTimerStart}>
+                    ▶ המשך
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="bf-save-row">
+            <SaveButton
+              status={getStatus('pumping')}
+              onClick={wrappedSave(handleSavePumping)}
+              onRetry={() => handleRetry('pumping')}
+              label="שמור שאיבה"
+            />
+            {hasPumpTimerActivity && (
+              <button type="button" className="bf-timer-btn reset" onClick={resetPumpTimer}>
+                ✕ איפוס
+              </button>
+            )}
+          </div>
         </div>
       )}
 

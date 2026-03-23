@@ -248,21 +248,29 @@ input {
 /* ── Breastfeeding Mode Toggle ── */
 
 .bf-mode-toggle {
-  width: 100%;
-  padding: 8px;
+  margin-right: auto;
+  padding: 4px 10px;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 600;
   border: 1px dashed var(--border);
-  margin-bottom: 14px;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .bf-mode-toggle:hover {
   color: var(--primary);
   border-color: var(--primary);
+}
+
+.bf-breast-label {
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 6px;
 }
 
 /* ── Breastfeeding Manual Entry ── */
@@ -516,6 +524,33 @@ input {
   background: var(--primary-light);
   border-radius: var(--radius-sm);
   margin-bottom: 8px;
+}
+
+/* ── Pumping Side Toggle ── */
+
+.pump-side-toggle {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.pump-side-toggle .bf-breast-btn {
+  flex: 1;
+}
+
+/* ── Pumping Timer Display ── */
+
+.pump-timer-display {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  padding: 16px 10px;
+  background: var(--primary-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  direction: ltr;
 }
 
 /* ── Card ── */
@@ -1196,34 +1231,68 @@ input {
   outline: none;
 }
 
-/* ── Table Buttons ── */
-
-.table-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 20px;
+.side-panel-content {
+  padding: 16px;
 }
 
-.table-btn {
-  padding: 12px 16px;
-  border-radius: var(--radius-sm);
+/* ── Side Panel Collapsible Sections ── */
+
+.sp-section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
   background: var(--primary-light);
   color: var(--primary-dark);
-  font-weight: 600;
-  font-size: 0.9rem;
-  text-align: right;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
   transition: all 0.2s;
 }
 
-.table-btn:hover {
+.sp-section-toggle:hover {
   background: var(--primary);
   color: white;
 }
 
-.table-btn.active {
+.sp-chevron {
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.sp-chevron.open {
+  transform: rotate(-90deg);
+}
+
+.sp-section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 12px;
+}
+
+/* ── Table / Graph Buttons ── */
+
+.table-btn,
+.graph-btn {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--primary-dark);
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-align: right;
+  transition: all 0.2s;
+  border: 1px solid var(--border);
+}
+
+.table-btn:hover,
+.graph-btn:hover {
   background: var(--primary);
   color: white;
+  border-color: var(--primary);
 }
 
 /* ── Data Table ── */
@@ -1468,24 +1537,6 @@ input {
   font-weight: 500;
 }
 
-/* ── Graph Buttons ── */
-
-.graph-btn {
-  padding: 12px 16px;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--primary);
-  font-weight: 600;
-  font-size: 0.9rem;
-  text-align: right;
-  transition: all 0.2s;
-  border: 2px solid var(--primary-light);
-}
-
-.graph-btn:hover {
-  background: var(--primary-light);
-  border-color: var(--primary);
-}
 
 /* ── Graph Modal ── */
 
@@ -1561,14 +1612,6 @@ input {
   color: var(--text);
 }
 
-/* ── Section headers in side panel ── */
-
-.table-buttons h3 {
-  font-size: 0.95rem;
-  color: var(--primary-dark);
-  margin-bottom: 4px;
-  font-weight: 700;
-}
 
 /* ── Login Screen ── */
 
