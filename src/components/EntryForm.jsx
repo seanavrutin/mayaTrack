@@ -41,7 +41,7 @@ function isToday(isoString) {
     d.getDate() === now.getDate();
 }
 
-export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, medications = [], medicationLogs = [], onLogMedication }) {
+export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, feedingEntries = [], medications = [], medicationLogs = [], onLogMedication }) {
   const [time, setTime] = useState(() => new Date());
   const [bottleType, setBottleType] = useState('formula');
   const [bottleAmount, setBottleAmount] = useState(0);
@@ -54,17 +54,29 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, med
   const [emptyDiaper, setEmptyDiaper] = useState(false);
   const [pumpingMin, setPumpingMin] = useState(0);
 
-  // Breastfeeding timer state
-  const [activeBreast, setActiveBreast] = useState(null);
-  const [timerRunning, setTimerRunning] = useState(false);
-  const [timerPaused, setTimerPaused] = useState(false);
-  const [timerStart, setTimerStart] = useState(null);
-  const [pausedElapsed, setPausedElapsed] = useState(0);
+  // Breastfeeding timer state — restored from localStorage on mount
+  const BF_STORAGE_KEY = 'bf-timer-state';
+
+  const loadSavedBfState = () => {
+    try {
+      const raw = localStorage.getItem(BF_STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch { return null; }
+  };
+
+  const savedBf = useRef(loadSavedBfState());
+
+  const [activeBreast, setActiveBreast] = useState(savedBf.current?.activeBreast ?? null);
+  const [timerRunning, setTimerRunning] = useState(savedBf.current?.timerRunning ?? false);
+  const [timerPaused, setTimerPaused] = useState(savedBf.current?.timerPaused ?? false);
+  const [timerStart, setTimerStart] = useState(savedBf.current?.timerStart ?? null);
+  const [pausedElapsed, setPausedElapsed] = useState(savedBf.current?.pausedElapsed ?? 0);
   const [currentElapsed, setCurrentElapsed] = useState(0);
-  const [rightSessions, setRightSessions] = useState([]);
-  const [leftSessions, setLeftSessions] = useState([]);
-  const [bfSessionStart, setBfSessionStart] = useState(null);
-  const [firstBreast, setFirstBreast] = useState(null);
+  const [rightSessions, setRightSessions] = useState(savedBf.current?.rightSessions ?? []);
+  const [leftSessions, setLeftSessions] = useState(savedBf.current?.leftSessions ?? []);
+  const [bfSessionStart, setBfSessionStart] = useState(savedBf.current?.bfSessionStart ?? null);
+  const [firstBreast, setFirstBreast] = useState(savedBf.current?.firstBreast ?? null);
 
   const { setStatus, getStatus } = useSaveStatus();
   const retryRef = useRef({});
@@ -76,6 +88,22 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, med
     }, 1000);
     return () => clearInterval(interval);
   }, [timerRunning, timerStart, pausedElapsed]);
+
+  useEffect(() => {
+    const hasActivity = activeBreast || rightSessions.length > 0 || leftSessions.length > 0;
+    if (hasActivity) {
+      localStorage.setItem(BF_STORAGE_KEY, JSON.stringify({
+        activeBreast, timerRunning, timerPaused,
+        timerStart, pausedElapsed,
+        rightSessions, leftSessions,
+        bfSessionStart, firstBreast,
+      }));
+    } else {
+      localStorage.removeItem(BF_STORAGE_KEY);
+    }
+  }, [activeBreast, timerRunning, timerPaused, timerStart,
+      pausedElapsed, rightSessions, leftSessions,
+      bfSessionStart, firstBreast]);
 
   const doSave = async (section, addFn, entry, resetFn) => {
     if (getStatus(section) === 'saving') return;
@@ -128,6 +156,7 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, med
     setRightSessions([]);
     setLeftSessions([]);
     setActiveBreast(null);
+    localStorage.removeItem(BF_STORAGE_KEY);
   };
 
   const getElapsedSeconds = () => {
@@ -168,21 +197,6 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, med
     setTimerStart(Date.now());
     setPausedElapsed(0);
     setCurrentElapsed(0);
-  };
-
-  const handleTimerPause = () => {
-    const elapsed = pausedElapsed + Math.floor((Date.now() - timerStart) / 1000);
-    setTimerRunning(false);
-    setTimerPaused(true);
-    setPausedElapsed(elapsed);
-    setCurrentElapsed(elapsed);
-    setTimerStart(null);
-  };
-
-  const handleTimerResume = () => {
-    setTimerRunning(true);
-    setTimerPaused(false);
-    setTimerStart(Date.now());
   };
 
   const handleTimerStop = () => {
@@ -302,7 +316,22 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, med
   const allMedsDone = medications.length > 0 &&
     medications.every(m => getMedTakenToday(m.name) >= m.timesPerDay);
 
+  const lastBreastSide = feedingEntries
+    .filter(e => e.type === 'breastfeeding' && e.startedBreast)
+    .sort((a, b) => new Date(b.time) - new Date(a.time))[0]?.startedBreast || null;
+
   const [openSection, setOpenSection] = useState(null);
+
+  const handleTileClick = (key) => {
+    if (openSection === key) {
+      setOpenSection(null);
+      return;
+    }
+    if (key === 'breastfeeding' && !activeBreast && lastBreastSide) {
+      setActiveBreast(lastBreastSide === 'right' ? 'left' : 'right');
+    }
+    setOpenSection(key);
+  };
 
   const tiles = [
     { key: 'bottle', emoji: '🍼', label: 'בקבוק' },
@@ -331,7 +360,7 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, med
             key={key}
             type="button"
             className={`tile ${openSection === key ? 'tile-active' : ''}`}
-            onClick={() => setOpenSection(openSection === key ? null : key)}
+            onClick={() => handleTileClick(key)}
           >
             <span className="tile-emoji">{emoji}</span>
             <span className="tile-label">{label}</span>
@@ -480,20 +509,9 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, med
                 </button>
               )}
               {(timerRunning || timerPaused) && (
-                <div className="bf-timer-controls">
-                  {timerRunning ? (
-                    <button type="button" className="bf-timer-btn pause" onClick={handleTimerPause}>
-                      ⏸ השהה
-                    </button>
-                  ) : (
-                    <button type="button" className="bf-timer-btn start" onClick={handleTimerResume}>
-                      ▶ המשך
-                    </button>
-                  )}
-                  <button type="button" className="bf-timer-btn stop" onClick={handleTimerStop}>
-                    ⏹ עצור
-                  </button>
-                </div>
+                <button type="button" className="bf-timer-btn stop" onClick={handleTimerStop}>
+                  ⏹ עצור
+                </button>
               )}
 
               {(rightSessions.length > 0 || leftSessions.length > 0 || timerRunning) && (
@@ -504,12 +522,19 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, med
             </div>
             )}
           </div>
-          <SaveButton
-            status={getStatus('breastfeeding')}
-            onClick={wrappedSave(handleSaveBreastfeeding)}
-            onRetry={() => handleRetry('breastfeeding')}
-            label="שמור הנקה"
-          />
+          <div className="bf-save-row">
+            <SaveButton
+              status={getStatus('breastfeeding')}
+              onClick={wrappedSave(handleSaveBreastfeeding)}
+              onRetry={() => handleRetry('breastfeeding')}
+              label="שמור הנקה"
+            />
+            {hasTimerSessions && (
+              <button type="button" className="bf-timer-btn reset" onClick={resetAll}>
+                ✕ איפוס
+              </button>
+            )}
+          </div>
         </div>
       )}
 

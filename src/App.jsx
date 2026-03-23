@@ -210,11 +210,12 @@ function App() {
         ref={mainRef}
         {...swipeHandlers}
       >
-        {activeTab === 'form' ? (
+        <div style={{ display: activeTab === 'form' ? 'block' : 'none' }}>
           <EntryForm
             onAddFeeding={(e) => handleAddEntry('feedings', { ...e, kidId: activeKidId })}
             onAddDiaper={(e) => handleAddEntry('diapers', { ...e, kidId: activeKidId })}
             onAddPumping={(e) => handleAddEntry('pumpings', e)}
+            feedingEntries={kidFeedingEntries}
             medications={activeKid?.medications || []}
             medicationLogs={kidMedicationLogs}
             onLogMedication={(medName) => handleAddEntry('medicationLogs', {
@@ -224,7 +225,8 @@ function App() {
               time: new Date().toISOString(),
             })}
           />
-        ) : (
+        </div>
+        {activeTab === 'summary' && (
           <Summary
             feedingEntries={kidFeedingEntries}
             diaperEntries={kidDiaperEntries}

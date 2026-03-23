@@ -412,13 +412,14 @@ input {
 
 .bf-timer-controls {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
 .bf-timer-controls .bf-timer-btn {
   margin-bottom: 0;
 }
+
 
 .bf-timer-btn {
   width: 100%;
@@ -455,6 +456,41 @@ input {
 
 .bf-timer-btn.stop:hover {
   background: #d84f7e;
+}
+
+.bf-save-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 4px;
+}
+
+.bf-save-row .save-btn {
+  flex: 7;
+  width: auto;
+  margin: 0;
+  padding: 14px 8px;
+  box-sizing: border-box;
+}
+
+.bf-save-row .bf-timer-btn.reset {
+  flex: 3;
+  width: auto;
+  margin: 0;
+  padding: 14px 8px;
+  box-sizing: border-box;
+}
+
+.bf-timer-btn.reset {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--text-muted);
+  font-size: 1rem;
+}
+
+.bf-timer-btn.reset:hover {
+  color: var(--secondary);
+  border-color: var(--secondary);
 }
 
 .bf-timer-btn:disabled {
