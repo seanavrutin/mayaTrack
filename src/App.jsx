@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './services/firebase';
-import { getUserFamily, subscribeToFamily, addEntry, deleteEntry, updateSetting, addKid, updateKid, deleteKid } from './services/firebaseApi';
+import { getUserFamily, subscribeToFamily, addEntry, updateEntry, deleteEntry, updateSetting, addKid, updateKid, deleteKid } from './services/firebaseApi';
 import EntryForm from './components/EntryForm';
 import Summary from './components/Summary';
 import SidePanel from './components/SidePanel';
@@ -116,6 +116,10 @@ function App() {
     await addEntry(family.familyId, collectionName, entry);
   };
 
+  const handleUpdateEntry = async (collectionName, id, data) => {
+    await updateEntry(family.familyId, collectionName, id, data);
+  };
+
   const handleDeleteEntry = async (collectionName, id) => {
     await deleteEntry(family.familyId, collectionName, id);
   };
@@ -213,6 +217,7 @@ function App() {
         <div style={{ display: activeTab === 'form' ? 'block' : 'none' }}>
           <EntryForm
             onAddFeeding={(e) => handleAddEntry('feedings', { ...e, kidId: activeKidId })}
+            onSupplementFeeding={(id, data) => handleUpdateEntry('feedings', id, data)}
             onAddDiaper={(e) => handleAddEntry('diapers', { ...e, kidId: activeKidId })}
             onAddPumping={(e) => handleAddEntry('pumpings', e)}
             feedingEntries={kidFeedingEntries}

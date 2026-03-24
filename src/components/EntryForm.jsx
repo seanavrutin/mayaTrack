@@ -41,10 +41,11 @@ function isToday(isoString) {
     d.getDate() === now.getDate();
 }
 
-export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, feedingEntries = [], medications = [], medicationLogs = [], onLogMedication }) {
+export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiaper, onAddPumping, feedingEntries = [], medications = [], medicationLogs = [], onLogMedication }) {
   const [time, setTime] = useState(() => new Date());
   const [bottleType, setBottleType] = useState('formula');
   const [bottleAmount, setBottleAmount] = useState(0);
+  const [supplementMode, setSupplementMode] = useState(false);
   const [manualStartTime, setManualStartTime] = useState('');
   const [manualEndTime, setManualEndTime] = useState('');
   const [manualBreast, setManualBreast] = useState('right');
@@ -167,6 +168,20 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
 
   // --- Bottle save (formula + pumped milk only) ---
   const handleSaveBottle = () => {
+    if (supplementMode && lastFeeding) {
+      const update = {};
+      if (bottleType === 'formula') {
+        update.formula = (lastFeeding.formula || 0) + bottleAmount;
+      } else {
+        update.pumpedMilk = (lastFeeding.pumpedMilk || 0) + bottleAmount;
+      }
+      doSave('bottle', () => onSupplementFeeding(lastFeeding.id, update), null, () => {
+        setBottleAmount(0);
+        setSupplementMode(false);
+        setTime(new Date());
+      });
+      return;
+    }
     const entry = {
       id: generateId(),
       type: 'bottle',
@@ -268,57 +283,64 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
   })();
 
   const handleSaveBreastfeeding = () => {
-    if (hasTimerSessions) {
-      const savedStartTime = bfSessionStart || time.toISOString();
-      const savedFirstBreast = firstBreast || activeBreast || 'right';
+    const buildBfData = () => {
+      if (hasTimerSessions) {
+        const savedStartTime = bfSessionStart || time.toISOString();
+        const savedFirstBreast = firstBreast || activeBreast || 'right';
 
-      let lastSessionSeconds = 0;
-      if (timerRunning || timerPaused) {
-        lastSessionSeconds = stopCurrentTimer();
+        let lastSessionSeconds = 0;
+        if (timerRunning || timerPaused) {
+          lastSessionSeconds = stopCurrentTimer();
+        }
+        const endTime = new Date().toISOString();
+
+        const allSeconds = [...rightSessions, ...leftSessions].reduce((a, b) => a + b, 0)
+          + lastSessionSeconds;
+        const totalMinutes = Math.round(allSeconds / 60);
+
+        return { totalMinutes, startTime: savedStartTime, endTime, startedBreast: savedFirstBreast, isTimer: true };
+      } else {
+        const totalMinutes = manualDurationMin;
+        const startTime = buildManualDateTime(manualStartTime) || time.toISOString();
+        const endTime = buildManualDateTime(manualEndTime) || new Date().toISOString();
+        return { totalMinutes, startTime, endTime, startedBreast: manualBreast, isTimer: false };
       }
-      const endTime = new Date().toISOString();
+    };
 
-      const allSeconds = [...rightSessions, ...leftSessions].reduce((a, b) => a + b, 0)
-        + lastSessionSeconds;
-      const totalMinutes = Math.round(allSeconds / 60);
+    const bfData = buildBfData();
 
-      const entry = {
-        id: generateId(),
-        type: 'breastfeeding',
-        time: savedStartTime,
-        formula: 0,
-        pumpedMilk: 0,
-        breastfeedingMinutes: totalMinutes,
-        startTime: savedStartTime,
-        endTime,
-        startedBreast: savedFirstBreast,
+    if (supplementMode && lastFeeding) {
+      const update = {
+        breastfeedingMinutes: (lastFeeding.breastfeedingMinutes || 0) + bfData.totalMinutes,
+        startTime: bfData.startTime,
+        endTime: bfData.endTime,
+        startedBreast: bfData.startedBreast,
       };
-      doSave('breastfeeding', onAddFeeding, entry, () => {
-        resetAll();
+      doSave('breastfeeding', () => onSupplementFeeding(lastFeeding.id, update), null, () => {
+        if (bfData.isTimer) resetAll();
+        else { setManualStartTime(''); setManualEndTime(''); }
+        setSupplementMode(false);
         setTime(new Date());
       });
-    } else {
-      const totalMinutes = manualDurationMin;
-      const startTime = buildManualDateTime(manualStartTime) || time.toISOString();
-      const endTime = buildManualDateTime(manualEndTime) || new Date().toISOString();
-
-      const entry = {
-        id: generateId(),
-        type: 'breastfeeding',
-        time: time.toISOString(),
-        formula: 0,
-        pumpedMilk: 0,
-        breastfeedingMinutes: totalMinutes,
-        startTime,
-        endTime,
-        startedBreast: manualBreast,
-      };
-      doSave('breastfeeding', onAddFeeding, entry, () => {
-        setManualStartTime('');
-        setManualEndTime('');
-        setTime(new Date());
-      });
+      return;
     }
+
+    const entry = {
+      id: generateId(),
+      type: 'breastfeeding',
+      time: bfData.isTimer ? bfData.startTime : time.toISOString(),
+      formula: 0,
+      pumpedMilk: 0,
+      breastfeedingMinutes: bfData.totalMinutes,
+      startTime: bfData.startTime,
+      endTime: bfData.endTime,
+      startedBreast: bfData.startedBreast,
+    };
+    doSave('breastfeeding', onAddFeeding, entry, () => {
+      if (bfData.isTimer) resetAll();
+      else { setManualStartTime(''); setManualEndTime(''); }
+      setTime(new Date());
+    });
   };
 
   const handleSaveDiaper = () => {
@@ -417,6 +439,9 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
     .filter(e => e.type === 'breastfeeding' && e.startedBreast)
     .sort((a, b) => new Date(b.time) - new Date(a.time))[0]?.startedBreast || null;
 
+  const lastFeeding = feedingEntries.length > 0 ? feedingEntries[0] : null;
+  const lastFeedingRecent = lastFeeding && (Date.now() - new Date(lastFeeding.time).getTime()) < 4 * 60 * 60 * 1000;
+
   const [openSection, setOpenSection] = useState(null);
 
   const handleTileClick = (key) => {
@@ -424,6 +449,7 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
       setOpenSection(null);
       return;
     }
+    setSupplementMode(false);
     if (key === 'breastfeeding' && !activeBreast && lastBreastSide) {
       setActiveBreast(lastBreastSide === 'right' ? 'left' : 'right');
     }
@@ -467,7 +493,19 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
 
       {openSection === 'bottle' && (
         <div className="card section-expanded">
-          <div className="card-title">🍼 בקבוק</div>
+          <div className="card-title">
+            🍼 בקבוק
+            {lastFeedingRecent && (
+              <label className="supplement-toggle">
+                <input
+                  type="checkbox"
+                  checked={supplementMode}
+                  onChange={(e) => setSupplementMode(e.target.checked)}
+                />
+                <span>השלמה</span>
+              </label>
+            )}
+          </div>
           <div className="section-fields">
             <div className="bottle-type-toggle">
               <button
@@ -495,7 +533,7 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
             status={getStatus('bottle')}
             onClick={wrappedSave(handleSaveBottle)}
             onRetry={() => handleRetry('bottle')}
-            label="שמור בקבוק"
+            label={supplementMode ? 'הוסף לארוחה קודמת' : 'שמור בקבוק'}
           />
         </div>
       )}
@@ -504,6 +542,16 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
         <div className="card section-expanded">
           <div className="card-title">
             🤱 הנקה
+            {lastFeedingRecent && (
+              <label className="supplement-toggle">
+                <input
+                  type="checkbox"
+                  checked={supplementMode}
+                  onChange={(e) => setSupplementMode(e.target.checked)}
+                />
+                <span>השלמה</span>
+              </label>
+            )}
             <button
               type="button"
               className="bf-mode-toggle"
@@ -628,7 +676,7 @@ export default function EntryForm({ onAddFeeding, onAddDiaper, onAddPumping, fee
               status={getStatus('breastfeeding')}
               onClick={wrappedSave(handleSaveBreastfeeding)}
               onRetry={() => handleRetry('breastfeeding')}
-              label="שמור הנקה"
+              label={supplementMode ? 'הוסף לארוחה קודמת' : 'שמור הנקה'}
             />
             {hasTimerSessions && (
               <button type="button" className="bf-timer-btn reset" onClick={resetAll}>

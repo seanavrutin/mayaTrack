@@ -105,6 +105,19 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
                   </span>
                 </div>
               </div>
+              {(lastFeeding.formula > 0 || lastFeeding.pumpedMilk > 0) && (
+                <div className="summary-row">
+                  <span className="summary-row-icon">🍼</span>
+                  <div className="summary-row-text">
+                    <span className="summary-row-label">
+                      השלמה: {[
+                        lastFeeding.formula > 0 && `תמ״ל ${lastFeeding.formula} מ״ל`,
+                        lastFeeding.pumpedMilk > 0 && `חלב שאוב ${lastFeeding.pumpedMilk} מ״ל`,
+                      ].filter(Boolean).join(' + ')}
+                    </span>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -116,6 +129,16 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
                 </div>
                 <span className="summary-row-ago">{timeAgo(lastFeeding?.time)}</span>
               </div>
+              {lastFeeding?.breastfeedingMinutes > 0 && (
+                <div className="summary-row">
+                  <span className="summary-row-icon">🤱</span>
+                  <div className="summary-row-text">
+                    <span className="summary-row-label">
+                      + הנקה {lastFeeding.breastfeedingMinutes} דקות
+                    </span>
+                  </div>
+                </div>
+              )}
               <div className="summary-row">
                 <span className="summary-row-icon">{feedingOverdue ? '🔴' : '⏰'}</span>
                 <div className="summary-row-text">

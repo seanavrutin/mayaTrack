@@ -105,6 +105,10 @@ export async function addEntry(familyId, collectionName, data) {
   await setDoc(docRef, fields);
 }
 
+export async function updateEntry(familyId, collectionName, entryId, data) {
+  await updateDoc(doc(db, 'families', familyId, collectionName, entryId), data);
+}
+
 export async function deleteEntry(familyId, collectionName, entryId) {
   await deleteDoc(doc(db, 'families', familyId, collectionName, entryId));
 }

@@ -776,6 +776,26 @@ input {
   border-color: var(--primary-dark);
 }
 
+/* ── Supplement Toggle ── */
+
+.supplement-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-secondary, #666);
+}
+
+.supplement-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
 /* ── Diaper Options ── */
 
 .diaper-options {
