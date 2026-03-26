@@ -14,7 +14,8 @@ export async function isMessagingSupported() {
 async function getFcmToken() {
   const messaging = await messagingPromise;
   if (!messaging) return null;
-  const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+  const registration = await navigator.serviceWorker.register('/mayaTrack/firebase-messaging-sw.js');
+  const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
   cachedToken = token;
   return token;
 }
