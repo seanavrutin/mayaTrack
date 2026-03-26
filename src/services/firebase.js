@@ -1,8 +1,9 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDlJI90SX46io5Tj-FOEkd35tT0JzsBK-8",
   authDomain: "mayatrack-c740f.firebaseapp.com",
   projectId: "mayatrack-c740f",
@@ -14,6 +15,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, 'maya-track-db');
+
+export const messagingPromise = isSupported().then(
+  (supported) => supported ? getMessaging(app) : null
+);
 
 const googleProvider = new GoogleAuthProvider();
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './services/firebase';
-import { getUserFamily, subscribeToFamily, addEntry, updateEntry, deleteEntry, updateSetting, addKid, updateKid, deleteKid } from './services/firebaseApi';
+import { getUserFamily, subscribeToFamily, addEntry, updateEntry, deleteEntry, updateSetting, addKid, updateKid, deleteKid, getUserReminderSettings } from './services/firebaseApi';
 import EntryForm from './components/EntryForm';
 import Summary from './components/Summary';
 import SidePanel from './components/SidePanel';
@@ -27,6 +27,10 @@ function App() {
     feedingIntervalMinutes: 180,
     pumpingIntervalMinutes: 180,
   });
+  const [reminderSettings, setReminderSettings] = useState({
+    reminderEnabled: false,
+    reminderTime: '20:00',
+  });
   const [dataReady, setDataReady] = useState(false);
 
   const [activeKidId, setActiveKidId] = useState(null);
@@ -47,6 +51,7 @@ function App() {
     if (!user) {
       setFamily(null);
       setFamilyLoading(false);
+      setReminderSettings({ reminderEnabled: false, reminderTime: '20:00' });
       return;
     }
     setFamilyLoading(true);
@@ -54,6 +59,9 @@ function App() {
       .then(setFamily)
       .catch(console.error)
       .finally(() => setFamilyLoading(false));
+    getUserReminderSettings(user.uid)
+      .then(setReminderSettings)
+      .catch(console.error);
   }, [user]);
 
   useEffect(() => {
@@ -273,6 +281,8 @@ function App() {
         user={user}
         settings={settings}
         onSettingsChange={handleSettingsChange}
+        reminderSettings={reminderSettings}
+        onReminderSettingsChange={setReminderSettings}
         kids={kids}
         onAddKid={handleAddKid}
         onUpdateKid={handleUpdateKid}

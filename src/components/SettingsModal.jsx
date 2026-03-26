@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { isMessagingSupported, enableNotifications, disableNotifications, updateReminderTime } from '../services/notifications';
 
 export default function SettingsModal({
   isOpen,
@@ -7,6 +8,8 @@ export default function SettingsModal({
   user,
   settings,
   onSettingsChange,
+  reminderSettings,
+  onReminderSettingsChange,
   kids,
   onAddKid,
   onUpdateKid,
@@ -16,6 +19,13 @@ export default function SettingsModal({
   const [editingKidId, setEditingKidId] = useState(null);
   const [newMedName, setNewMedName] = useState('');
   const [newMedTimes, setNewMedTimes] = useState(1);
+  const [fcmSupported, setFcmSupported] = useState(false);
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [reminderError, setReminderError] = useState(null);
+
+  useEffect(() => {
+    isMessagingSupported().then(setFcmSupported);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -24,6 +34,39 @@ export default function SettingsModal({
     if (!isNaN(num) && num >= 0) {
       onSettingsChange({ ...settings, [key]: num });
     }
+  };
+
+  const handleToggleReminder = async (enabled) => {
+    if (!family?.familyId || !user?.uid) return;
+    setReminderError(null);
+    setReminderLoading(true);
+    try {
+      if (enabled) {
+        const time = reminderSettings.reminderTime || '20:00';
+        const result = await enableNotifications(family.familyId, user.uid, time);
+        if (!result.success) {
+          setReminderError(
+            result.reason === 'denied'
+              ? 'ההתראות חסומות בדפדפן. יש לאפשר התראות בהגדרות הדפדפן.'
+              : 'לא ניתן להפעיל התראות במכשיר זה.'
+          );
+          setReminderLoading(false);
+          return;
+        }
+      } else {
+        await disableNotifications(family.familyId, user.uid);
+      }
+      onReminderSettingsChange({ ...reminderSettings, reminderEnabled: enabled });
+    } catch {
+      setReminderError('שגיאה בהפעלת התראות');
+    }
+    setReminderLoading(false);
+  };
+
+  const handleReminderTimeChange = async (time) => {
+    if (!family?.familyId || !user?.uid) return;
+    onReminderSettingsChange({ ...reminderSettings, reminderTime: time });
+    await updateReminderTime(family.familyId, user.uid, time);
   };
 
   const handleAddKid = () => {
@@ -110,6 +153,37 @@ export default function SettingsModal({
               />
             </div>
           </div>
+
+          {/* Medication Reminder */}
+          {fcmSupported && (
+            <div className="settings-modal-section">
+              <h3>🔔 תזכורת תרופות</h3>
+              <div className="setting-row">
+                <span className="setting-label">תזכורת יומית</span>
+                <button
+                  className={`reminder-toggle ${reminderSettings.reminderEnabled ? 'active' : ''}`}
+                  onClick={() => handleToggleReminder(!reminderSettings.reminderEnabled)}
+                  disabled={reminderLoading}
+                >
+                  {reminderLoading ? '...' : reminderSettings.reminderEnabled ? 'פעיל' : 'כבוי'}
+                </button>
+              </div>
+              {reminderSettings.reminderEnabled && (
+                <div className="setting-row">
+                  <span className="setting-label">שעת תזכורת</span>
+                  <input
+                    className="setting-input reminder-time-input"
+                    type="time"
+                    value={reminderSettings.reminderTime || '20:00'}
+                    onChange={(e) => handleReminderTimeChange(e.target.value)}
+                  />
+                </div>
+              )}
+              {reminderError && (
+                <p className="reminder-denied-hint">{reminderError}</p>
+              )}
+            </div>
+          )}
 
           {/* Kids & Medications */}
           <div className="settings-modal-section">
