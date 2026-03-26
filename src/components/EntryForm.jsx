@@ -449,6 +449,7 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
       setOpenSection(null);
       return;
     }
+    setTime(new Date());
     setSupplementMode(false);
     if (key === 'breastfeeding' && !activeBreast && lastBreastSide) {
       setActiveBreast(lastBreastSide === 'right' ? 'left' : 'right');
