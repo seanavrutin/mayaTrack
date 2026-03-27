@@ -7,7 +7,12 @@ initializeApp();
 
 const db = getFirestore('maya-track-db');
 
-function getCurrentTimeSlot(timezone) {
+function toMinutes(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function getCurrentMinutes(timezone) {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat('en-GB', {
     hour: '2-digit',
@@ -16,14 +21,16 @@ function getCurrentTimeSlot(timezone) {
     timeZone: timezone,
   });
   const [h, m] = formatter.format(now).split(':').map(Number);
-  const roundedMin = Math.floor(m / 15) * 15;
-  return `${String(h).padStart(2, '0')}:${String(roundedMin).padStart(2, '0')}`;
+  return h * 60 + m;
 }
 
-function roundTimeTo15(timeStr) {
-  const [h, m] = timeStr.split(':').map(Number);
-  const roundedMin = Math.floor(m / 15) * 15;
-  return `${String(h).padStart(2, '0')}:${String(roundedMin).padStart(2, '0')}`;
+function isInWindow(reminderMinutes, nowMinutes, windowSize) {
+  const start = nowMinutes - windowSize + 1;
+  if (start >= 0) {
+    return reminderMinutes >= start && reminderMinutes <= nowMinutes;
+  }
+  // Wraps past midnight: e.g. now=5, window=15 → start=-9 → check 1431..1440 OR 0..5
+  return reminderMinutes >= (start + 1440) || reminderMinutes <= nowMinutes;
 }
 
 function getTodayDateString(timezone) {
@@ -38,7 +45,7 @@ exports.medicationReminder = onSchedule(
   },
   async () => {
     const timezone = 'Asia/Jerusalem';
-    const currentSlot = getCurrentTimeSlot(timezone);
+    const nowMinutes = getCurrentMinutes(timezone);
     const todayStr = getTodayDateString(timezone);
 
     const familiesSnap = await db.collection('families').get();
@@ -56,7 +63,7 @@ exports.medicationReminder = onSchedule(
         const matchingTokens = tokensSnap.docs.filter((d) => {
           const data = d.data();
           if (!data.reminderTime) return false;
-          return roundTimeTo15(data.reminderTime) === currentSlot;
+          return isInWindow(toMinutes(data.reminderTime), nowMinutes, 15);
         });
 
         if (matchingTokens.length === 0) continue;
