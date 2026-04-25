@@ -4,9 +4,15 @@ function formatTime(isoString) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function timeAgo(isoString) {
+function formatDateShort(isoString) {
   if (!isoString) return '';
-  const diff = Date.now() - new Date(isoString).getTime();
+  const d = new Date(isoString);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function timeAgo(isoString, now) {
+  if (!isoString) return '';
+  const diff = now - new Date(isoString).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'עכשיו';
   if (mins < 60) return `לפני ${mins} דק׳`;
@@ -22,13 +28,13 @@ function addMinutesToISO(isoString, minutes) {
   return d.toISOString();
 }
 
-function isOverdue(isoString) {
-  return isoString && new Date(isoString) < new Date();
+function isOverdue(isoString, now) {
+  return isoString && new Date(isoString).getTime() < now;
 }
 
-function timeUntil(isoString) {
+function timeUntil(isoString, now) {
   if (!isoString) return '';
-  const diff = new Date(isoString).getTime() - Date.now();
+  const diff = new Date(isoString).getTime() - now;
   if (diff <= 0) return 'עבר הזמן!';
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `עוד ${mins} דק׳`;
@@ -37,16 +43,16 @@ function timeUntil(isoString) {
   return `עוד ${hrs} שע׳ ${remMins > 0 ? `ו-${remMins} דק׳` : ''}`;
 }
 
-function isToday(isoString) {
+function isToday(isoString, now) {
   if (!isoString) return false;
   const d = new Date(isoString);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
+  const ref = new Date(now);
+  return d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate();
 }
 
-export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, medications = [], medicationLogs = [], onLogMedication, settings, loading }) {
+export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, medications = [], medicationLogs = [], onLogMedication, settings, loading, now, firstSyncDone = true }) {
   if (loading) {
     return (
       <div className="loading-screen">
@@ -61,11 +67,19 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
   const lastPeeDiaper = diaperEntries.find((e) => e.pee) ?? null;
   const lastPoopDiaper = diaperEntries.find((e) => e.poop) ?? null;
 
-  const todayMedLogs = medicationLogs.filter(e => isToday(e.time));
+  const todayMedLogs = medicationLogs.filter(e => isToday(e.time, now));
   const getMedTakenToday = (medName) =>
     todayMedLogs.filter(e => e.medicationName === medName).length;
-  const anyMedMissing = medications.length > 0 &&
-    medications.some(m => getMedTakenToday(m.name) < m.timesPerDay);
+  const getLastMedLog = (medName) => {
+    let latest = null;
+    for (const e of medicationLogs) {
+      if (e.medicationName !== medName || !e.time) continue;
+      if (!latest || new Date(e.time).getTime() > new Date(latest.time).getTime()) {
+        latest = e;
+      }
+    }
+    return latest;
+  };
 
   const nextFeedingTime = lastFeeding
     ? addMinutesToISO(lastFeeding.time, settings.feedingIntervalMinutes)
@@ -74,8 +88,13 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
     ? addMinutesToISO(lastPumping.time, settings.pumpingIntervalMinutes)
     : null;
 
-  const feedingOverdue = isOverdue(nextFeedingTime);
-  const pumpingOverdue = isOverdue(nextPumpingTime);
+  // Suppress alarm-style "overdue" / missing-med styling until we've completed
+  // a fresh sync, so cached/stale data doesn't trigger false red warnings.
+  const showWarnings = firstSyncDone;
+  const feedingOverdue = showWarnings && isOverdue(nextFeedingTime, now);
+  const pumpingOverdue = showWarnings && isOverdue(nextPumpingTime, now);
+  const anyMedMissing = showWarnings && medications.length > 0 &&
+    medications.some(m => getMedTakenToday(m.name) < m.timesPerDay);
 
   return (
     <div className="summary">
@@ -95,7 +114,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
                     {formatTime(lastFeeding.startTime)} → {formatTime(lastFeeding.endTime)}
                   </span>
                 </div>
-                <span className="summary-row-ago">{timeAgo(lastFeeding.startTime)}</span>
+                <span className="summary-row-ago">{timeAgo(lastFeeding.startTime, now)}</span>
               </div>
               <div className="summary-row">
                 <span className="summary-row-icon">⏱</span>
@@ -127,7 +146,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
                   <span className="summary-row-label">אחרונה</span>
                   <span className="summary-row-time">{formatTime(lastFeeding?.time)}</span>
                 </div>
-                <span className="summary-row-ago">{timeAgo(lastFeeding?.time)}</span>
+                <span className="summary-row-ago">{timeAgo(lastFeeding?.time, now)}</span>
               </div>
               {lastFeeding?.breastfeedingMinutes > 0 && (
                 <div className="summary-row">
@@ -148,7 +167,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
                   </span>
                 </div>
                 <span className={`summary-row-countdown ${feedingOverdue ? 'warning' : ''}`}>
-                  {timeUntil(nextFeedingTime)}
+                  {timeUntil(nextFeedingTime, now)}
                 </span>
               </div>
             </>
@@ -172,7 +191,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
                 </span>
               )}
             </div>
-            <span className="summary-row-ago">{timeAgo(lastPumping?.time)}</span>
+            <span className="summary-row-ago">{timeAgo(lastPumping?.time, now)}</span>
           </div>
           {settings.pumpingIntervalMinutes > 0 && (
             <div className="summary-row">
@@ -184,7 +203,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
                 </span>
               </div>
               <span className={`summary-row-countdown ${pumpingOverdue ? 'warning' : ''}`}>
-                {timeUntil(nextPumpingTime)}
+                {timeUntil(nextPumpingTime, now)}
               </span>
             </div>
           )}
@@ -202,7 +221,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
               <span className="summary-row-label">פיפי אחרון</span>
               <span className="summary-row-time">{formatTime(lastPeeDiaper?.time)}</span>
             </div>
-            <span className="summary-row-ago">{timeAgo(lastPeeDiaper?.time)}</span>
+            <span className="summary-row-ago">{timeAgo(lastPeeDiaper?.time, now)}</span>
           </div>
           <div className="summary-row">
             <span className="summary-row-icon">💩</span>
@@ -210,7 +229,7 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
               <span className="summary-row-label">קקי אחרון</span>
               <span className="summary-row-time">{formatTime(lastPoopDiaper?.time)}</span>
             </div>
-            <span className="summary-row-ago">{timeAgo(lastPoopDiaper?.time)}</span>
+            <span className="summary-row-ago">{timeAgo(lastPoopDiaper?.time, now)}</span>
           </div>
         </div>
       </div>
@@ -224,6 +243,8 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
             {medications.map((med) => {
               const taken = getMedTakenToday(med.name);
               const done = taken >= med.timesPerDay;
+              const lastLog = getLastMedLog(med.name);
+              const lastIsToday = lastLog && isToday(lastLog.time, now);
               return (
                 <div key={med.name} className="summary-row summary-med-row">
                   <span className="summary-row-icon">{done ? '✅' : '❌'}</span>
@@ -232,6 +253,13 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
                       {med.name}
                     </span>
                   </div>
+                  {lastLog && (
+                    <span className="summary-med-last">
+                      {lastIsToday
+                        ? formatTime(lastLog.time)
+                        : `${formatDateShort(lastLog.time)} ${formatTime(lastLog.time)}`}
+                    </span>
+                  )}
                   <button
                     className={`med-counter-btn ${done ? 'counter-done' : ''}`}
                     onClick={() => !done && onLogMedication(med.name)}

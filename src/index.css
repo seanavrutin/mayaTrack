@@ -1017,6 +1017,14 @@ input {
   cursor: default;
 }
 
+.summary-med-last {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  direction: ltr;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ── Summary Cards ── */
 
 .summary {
