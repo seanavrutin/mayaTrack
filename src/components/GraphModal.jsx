@@ -2,8 +2,23 @@ import { useRef, useEffect, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 const BAR_SPACE = 55;
-const CHART_HEIGHT = 250;
-const CHART_MARGIN = { top: 10, right: 10, left: 0, bottom: 5 };
+const CHART_HEIGHT = 260;
+const CHART_MARGIN = { top: 16, right: 12, left: 4, bottom: 8 };
+const AXIS_TICK = { fontSize: 11, fill: '#8b7a9e' };
+const GRID_STROKE = '#ece4f7';
+
+function ChartTooltip({ active, payload, label, unit }) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div className="chart-tooltip">
+      <div className="chart-tooltip-label">{label}</div>
+      <div className="chart-tooltip-value">
+        {payload[0].value}
+        {unit ? ` ${unit}` : ''}
+      </div>
+    </div>
+  );
+}
 
 function isTruthy(val) {
   if (typeof val === 'boolean') return val;
@@ -192,45 +207,78 @@ export default function GraphModal({
   const chartWidth = Math.max(data.length * BAR_SPACE, 300);
 
   const renderChart = () => {
+    const cursorStyle = { fill: 'rgba(124, 92, 191, 0.08)' };
     switch (type) {
       case 'pee':
         return (
           <BarChart width={chartWidth} height={CHART_HEIGHT} data={data} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 12 }} width={35} />
-            <Tooltip formatter={(val) => [`${val}`, 'פיפי']} />
-            <Bar dataKey="count" fill="#f9a825" radius={[4, 4, 0, 0]} />
+            <defs>
+              <linearGradient id="grad-pee" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#ffc107" stopOpacity={0.95} />
+                <stop offset="100%" stopColor="#f9a825" stopOpacity={0.85} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
+            <XAxis dataKey="date" tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: GRID_STROKE }} />
+            <YAxis allowDecimals={false} tick={AXIS_TICK} tickLine={false} axisLine={false} width={32} />
+            <Tooltip cursor={cursorStyle} content={<ChartTooltip unit="פיפי" />} />
+            <Bar dataKey="count" fill="url(#grad-pee)" radius={[8, 8, 0, 0]} maxBarSize={36} />
           </BarChart>
         );
       case 'poop':
         return (
           <BarChart width={chartWidth} height={CHART_HEIGHT} data={data} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 12 }} width={35} />
-            <Tooltip formatter={(val) => [`${val}`, 'קקי']} />
-            <Bar dataKey="count" fill="#8d6e63" radius={[4, 4, 0, 0]} />
+            <defs>
+              <linearGradient id="grad-poop" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#a98274" stopOpacity={0.95} />
+                <stop offset="100%" stopColor="#8d6e63" stopOpacity={0.85} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
+            <XAxis dataKey="date" tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: GRID_STROKE }} />
+            <YAxis allowDecimals={false} tick={AXIS_TICK} tickLine={false} axisLine={false} width={32} />
+            <Tooltip cursor={cursorStyle} content={<ChartTooltip unit="קקי" />} />
+            <Bar dataKey="count" fill="url(#grad-poop)" radius={[8, 8, 0, 0]} maxBarSize={36} />
           </BarChart>
         );
       case 'food':
         return (
           <LineChart width={chartWidth} height={CHART_HEIGHT} data={data} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 12 }} width={35} />
-            <Tooltip formatter={(val) => [`${val}`, 'האכלות']} />
-            <Line type="monotone" dataKey="count" stroke="#7c5cbf" strokeWidth={2} dot={{ r: 4, fill: '#7c5cbf' }} activeDot={{ r: 6 }} />
+            <defs>
+              <linearGradient id="grad-food" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#7c5cbf" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#7c5cbf" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
+            <XAxis dataKey="date" tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: GRID_STROKE }} />
+            <YAxis allowDecimals={false} tick={AXIS_TICK} tickLine={false} axisLine={false} width={32} />
+            <Tooltip cursor={{ stroke: '#7c5cbf', strokeWidth: 1, strokeDasharray: '3 3' }} content={<ChartTooltip unit="האכלות" />} />
+            <Line
+              type="monotone"
+              dataKey="count"
+              stroke="#7c5cbf"
+              strokeWidth={2.5}
+              fill="url(#grad-food)"
+              dot={{ r: 4, fill: '#fff', stroke: '#7c5cbf', strokeWidth: 2 }}
+              activeDot={{ r: 6, fill: '#7c5cbf', stroke: '#fff', strokeWidth: 2 }}
+            />
           </LineChart>
         );
       case 'pumping':
         return (
           <BarChart width={chartWidth} height={CHART_HEIGHT} data={data} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-            <YAxis unit="׳" allowDecimals={false} tick={{ fontSize: 12 }} width={40} />
-            <Tooltip formatter={(val) => [`${val} דקות`, 'שאיבה']} />
-            <Bar dataKey="minutes" fill="#66bb6a" radius={[4, 4, 0, 0]} />
+            <defs>
+              <linearGradient id="grad-pumping" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#81c784" stopOpacity={0.95} />
+                <stop offset="100%" stopColor="#66bb6a" stopOpacity={0.85} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
+            <XAxis dataKey="date" tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: GRID_STROKE }} />
+            <YAxis unit="׳" allowDecimals={false} tick={AXIS_TICK} tickLine={false} axisLine={false} width={36} />
+            <Tooltip cursor={cursorStyle} content={<ChartTooltip unit="דקות" />} />
+            <Bar dataKey="minutes" fill="url(#grad-pumping)" radius={[8, 8, 0, 0]} maxBarSize={36} />
           </BarChart>
         );
       default:
@@ -254,7 +302,9 @@ export default function GraphModal({
               <div className="graph-scroll-container" ref={scrollRef}>
                 {renderChart()}
               </div>
-              <p className="graph-summary">{summary}</p>
+              <div className="graph-summary">
+                <span className="graph-summary-pill">{summary}</span>
+              </div>
             </>
           )}
         </div>

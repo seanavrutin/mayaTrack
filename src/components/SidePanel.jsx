@@ -36,8 +36,9 @@ export default function SidePanel({
 }) {
   const [activeTable, setActiveTable] = useState(null);
   const [activeGraph, setActiveGraph] = useState(null);
-  const [tablesOpen, setTablesOpen] = useState(false);
-  const [graphsOpen, setGraphsOpen] = useState(false);
+  const [openSection, setOpenSection] = useState('tables');
+  const tablesOpen = openSection === 'tables';
+  const graphsOpen = openSection === 'graphs';
 
   return (
     <>
@@ -55,7 +56,7 @@ export default function SidePanel({
         </div>
 
         <div className="side-panel-content">
-          <button className="sp-section-toggle" onClick={() => setTablesOpen(!tablesOpen)}>
+          <button className="sp-section-toggle" onClick={() => setOpenSection(tablesOpen ? null : 'tables')}>
             <span>📋 טבלאות</span>
             <span className={`sp-chevron ${tablesOpen ? 'open' : ''}`}>◀</span>
           </button>
@@ -68,7 +69,7 @@ export default function SidePanel({
             </div>
           )}
 
-          <button className="sp-section-toggle" onClick={() => setGraphsOpen(!graphsOpen)}>
+          <button className="sp-section-toggle" onClick={() => setOpenSection(graphsOpen ? null : 'graphs')}>
             <span>📊 גרפים</span>
             <span className={`sp-chevron ${graphsOpen ? 'open' : ''}`}>◀</span>
           </button>
@@ -126,13 +127,13 @@ export default function SidePanel({
                     <tbody>
                       {feedingEntries.map((e) => (
                         <tr key={e.id}>
-                          <td>{fmtDate(e.time)}</td>
-                          <td>{fmt(e.time)}</td>
-                          <td>{e.formula}</td>
-                          <td>{e.pumpedMilk}</td>
-                          <td>{e.breastfeedingMinutes}׳</td>
-                          <td>
-                            <button className="delete-btn" onClick={() => onDeleteFeeding(e.id)}>✕</button>
+                          <td className="cell-date">{fmtDate(e.time)}</td>
+                          <td className="cell-time">{fmt(e.time)}</td>
+                          <td className="cell-num">{e.formula > 0 ? e.formula : <span className="cell-dash">—</span>}</td>
+                          <td className="cell-num">{e.pumpedMilk > 0 ? e.pumpedMilk : <span className="cell-dash">—</span>}</td>
+                          <td className="cell-num">{e.breastfeedingMinutes > 0 ? `${e.breastfeedingMinutes}׳` : <span className="cell-dash">—</span>}</td>
+                          <td className="cell-action">
+                            <button className="delete-btn" onClick={() => onDeleteFeeding(e.id)} aria-label="מחק">✕</button>
                           </td>
                         </tr>
                       ))}
@@ -157,15 +158,18 @@ export default function SidePanel({
                     <tbody>
                       {diaperEntries.map((e) => (
                         <tr key={e.id}>
-                          <td>{fmtDate(e.time)}</td>
-                          <td>{fmt(e.time)}</td>
+                          <td className="cell-date">{fmtDate(e.time)}</td>
+                          <td className="cell-time">{fmt(e.time)}</td>
                           <td>
-                            {[e.pee && 'פיפי', e.poop && 'קקי', e.empty && 'ריק']
-                              .filter(Boolean)
-                              .join(', ') || '—'}
+                            <div className="badge-group">
+                              {e.pee && <span className="badge badge-pee">💧 פיפי</span>}
+                              {e.poop && <span className="badge badge-poop">💩 קקי</span>}
+                              {e.empty && <span className="badge badge-empty">ריק</span>}
+                              {!e.pee && !e.poop && !e.empty && <span className="cell-dash">—</span>}
+                            </div>
                           </td>
-                          <td>
-                            <button className="delete-btn" onClick={() => onDeleteDiaper(e.id)}>✕</button>
+                          <td className="cell-action">
+                            <button className="delete-btn" onClick={() => onDeleteDiaper(e.id)} aria-label="מחק">✕</button>
                           </td>
                         </tr>
                       ))}
@@ -183,7 +187,7 @@ export default function SidePanel({
                       <tr>
                         <th>תאריך</th>
                         <th>שעה</th>
-                        <th>משך (דקות)</th>
+                        <th>משך</th>
                         <th>צד</th>
                         <th></th>
                       </tr>
@@ -191,12 +195,17 @@ export default function SidePanel({
                     <tbody>
                       {pumpingEntries.map((e) => (
                         <tr key={e.id}>
-                          <td>{fmtDate(e.time)}</td>
-                          <td>{fmt(e.time)}</td>
-                          <td>{e.durationMinutes}׳</td>
-                          <td>{e.side === 'right' ? 'ימין' : e.side === 'left' ? 'שמאל' : e.side === 'both' ? 'שתיהן' : '—'}</td>
+                          <td className="cell-date">{fmtDate(e.time)}</td>
+                          <td className="cell-time">{fmt(e.time)}</td>
+                          <td className="cell-num">{e.durationMinutes}׳</td>
                           <td>
-                            <button className="delete-btn" onClick={() => onDeletePumping(e.id)}>✕</button>
+                            {e.side === 'right' && <span className="badge badge-side">ימין</span>}
+                            {e.side === 'left' && <span className="badge badge-side">שמאל</span>}
+                            {e.side === 'both' && <span className="badge badge-side">שתיהן</span>}
+                            {!e.side && <span className="cell-dash">—</span>}
+                          </td>
+                          <td className="cell-action">
+                            <button className="delete-btn" onClick={() => onDeletePumping(e.id)} aria-label="מחק">✕</button>
                           </td>
                         </tr>
                       ))}
@@ -221,11 +230,11 @@ export default function SidePanel({
                     <tbody>
                       {medicationLogs.map((e) => (
                         <tr key={e.id}>
-                          <td>{fmtDate(e.time)}</td>
-                          <td>{fmt(e.time)}</td>
-                          <td>{e.medicationName}</td>
-                          <td>
-                            <button className="delete-btn" onClick={() => onDeleteMedicationLog(e.id)}>✕</button>
+                          <td className="cell-date">{fmtDate(e.time)}</td>
+                          <td className="cell-time">{fmt(e.time)}</td>
+                          <td><span className="badge badge-med">💊 {e.medicationName}</span></td>
+                          <td className="cell-action">
+                            <button className="delete-btn" onClick={() => onDeleteMedicationLog(e.id)} aria-label="מחק">✕</button>
                           </td>
                         </tr>
                       ))}
