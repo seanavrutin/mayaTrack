@@ -32,17 +32,39 @@ function useSaveStatus() {
   return { setStatus, getStatus };
 }
 
-function isToday(isoString) {
+function isToday(isoString, nowMs) {
   if (!isoString) return false;
   const d = new Date(isoString);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
+  const ref = nowMs ? new Date(nowMs) : new Date();
+  return d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate();
 }
 
-export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiaper, onAddPumping, feedingEntries = [], medications = [], medicationLogs = [], onLogMedication }) {
+const MANUAL_EDIT_GRACE_MS = 2 * 60 * 1000;
+
+export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAddDiaper, onAddPumping, feedingEntries = [], medications = [], medicationLogs = [], onLogMedication }) {
   const [time, setTime] = useState(() => new Date());
+  const [manualEditedAt, setManualEditedAt] = useState(null);
+
+  // Auto-sync the time field to "now" unless the user has manually edited
+  // the time within the last MANUAL_EDIT_GRACE_MS (gives them room to submit
+  // a backdated entry without being overwritten by the ticker).
+  useEffect(() => {
+    if (manualEditedAt && now - manualEditedAt < MANUAL_EDIT_GRACE_MS) return;
+    if (manualEditedAt) setManualEditedAt(null);
+    setTime(new Date(now));
+  }, [now, manualEditedAt]);
+
+  const handleTimeChange = useCallback((newDate) => {
+    setTime(newDate);
+    setManualEditedAt(Date.now());
+  }, []);
+
+  const resetTimeToNow = useCallback(() => {
+    setManualEditedAt(null);
+    setTime(new Date());
+  }, []);
   const [bottleType, setBottleType] = useState('formula');
   const [bottleAmount, setBottleAmount] = useState(0);
   const [supplementMode, setSupplementMode] = useState(false);
@@ -178,7 +200,7 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
       doSave('bottle', () => onSupplementFeeding(lastFeeding.id, update), null, () => {
         setBottleAmount(0);
         setSupplementMode(false);
-        setTime(new Date());
+        resetTimeToNow();
       });
       return;
     }
@@ -192,7 +214,7 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
     };
     doSave('bottle', onAddFeeding, entry, () => {
       setBottleAmount(0);
-      setTime(new Date());
+      resetTimeToNow();
     });
   };
 
@@ -320,7 +342,7 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
         if (bfData.isTimer) resetAll();
         else { setManualStartTime(''); setManualEndTime(''); }
         setSupplementMode(false);
-        setTime(new Date());
+        resetTimeToNow();
       });
       return;
     }
@@ -339,7 +361,7 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
     doSave('breastfeeding', onAddFeeding, entry, () => {
       if (bfData.isTimer) resetAll();
       else { setManualStartTime(''); setManualEndTime(''); }
-      setTime(new Date());
+      resetTimeToNow();
     });
   };
 
@@ -355,7 +377,7 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
       setPee(false);
       setPoop(false);
       setEmptyDiaper(false);
-      setTime(new Date());
+      resetTimeToNow();
     });
   };
 
@@ -411,7 +433,7 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
       };
       doSave('pumping', onAddPumping, entry, () => {
         resetPumpTimer();
-        setTime(new Date());
+        resetTimeToNow();
       });
     } else {
       const entry = {
@@ -422,12 +444,12 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
       };
       doSave('pumping', onAddPumping, entry, () => {
         setPumpingMin(0);
-        setTime(new Date());
+        resetTimeToNow();
       });
     }
   };
 
-  const todayMedLogs = medicationLogs.filter(e => isToday(e.time));
+  const todayMedLogs = medicationLogs.filter(e => isToday(e.time, now));
 
   const getMedTakenToday = (medName) =>
     todayMedLogs.filter(e => e.medicationName === medName).length;
@@ -449,7 +471,6 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
       setOpenSection(null);
       return;
     }
-    setTime(new Date());
     setSupplementMode(false);
     if (key === 'breastfeeding' && !activeBreast && lastBreastSide) {
       setActiveBreast(lastBreastSide === 'right' ? 'left' : 'right');
@@ -475,7 +496,7 @@ export default function EntryForm({ onAddFeeding, onSupplementFeeding, onAddDiap
   return (
     <div className="entry-form">
       <div className="card">
-        <TimeInput value={time} onChange={setTime} />
+        <TimeInput value={time} onChange={handleTimeChange} />
       </div>
 
       <div className="tile-grid">

@@ -11,6 +11,7 @@ import LoginScreen from './components/LoginScreen';
 import FamilyScreen from './components/FamilyScreen';
 import SyncBanner from './components/SyncBanner';
 import useSwipe from './hooks/useSwipe';
+import useNow from './hooks/useNow';
 
 const SUBSCRIPTION_SOURCES = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs', 'kids', 'settings'];
 
@@ -55,6 +56,8 @@ function App() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [slideDir, setSlideDir] = useState(null);
   const mainRef = useRef(null);
+
+  const { now, tick } = useNow(30_000);
 
   const resetAfterSignOut = useCallback(() => {
     setFamily(null);
@@ -167,6 +170,20 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const onResume = () => {
+      if (document.visibilityState === 'visible') {
+        setRetryKey((k) => k + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('pageshow', onResume);
+    return () => {
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('pageshow', onResume);
+    };
+  }, []);
+
+  useEffect(() => {
     if (firstSyncDone) return;
     const states = SUBSCRIPTION_SOURCES.map((s) => sourceStatus[s]);
     if (states.some((s) => !s || s === 'syncing')) return;
@@ -270,6 +287,7 @@ function App() {
 
   const switchTab = useCallback((tab, dir) => {
     if (tab === activeTab) return;
+    tick();
     setSlideDir(dir);
     requestAnimationFrame(() => {
       setActiveTab(tab);
@@ -278,7 +296,7 @@ function App() {
         el.addEventListener('animationend', () => setSlideDir(null), { once: true });
       }
     });
-  }, [activeTab]);
+  }, [activeTab, tick]);
 
   const swipeHandlers = useSwipe(
     () => switchTab('form', 'slide-right'),
@@ -356,6 +374,7 @@ function App() {
       >
         <div style={{ display: activeTab === 'form' ? 'block' : 'none' }}>
           <EntryForm
+            now={now}
             onAddFeeding={(e) => handleAddEntry('feedings', { ...e, kidId: activeKidId })}
             onSupplementFeeding={(id, data) => handleUpdateEntry('feedings', id, data)}
             onAddDiaper={(e) => handleAddEntry('diapers', { ...e, kidId: activeKidId })}
@@ -373,6 +392,8 @@ function App() {
         </div>
         {activeTab === 'summary' && (
           <Summary
+            now={now}
+            firstSyncDone={firstSyncDone}
             feedingEntries={kidFeedingEntries}
             diaperEntries={kidDiaperEntries}
             pumpingEntries={pumpingEntries}
