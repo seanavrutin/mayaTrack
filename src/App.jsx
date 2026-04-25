@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './services/firebase';
-import { getUserFamily, subscribeToFamily, addEntry, updateEntry, deleteEntry, updateSetting, addKid, updateKid, deleteKid, getUserReminderSettings } from './services/firebaseApi';
+import { getUserFamily, subscribeToFamily, addEntry, updateEntry, deleteEntry, updateSetting, addKid, updateKid, deleteKid } from './services/firebaseApi';
 import { loadCache, saveCache, clearCache } from './services/cache';
 import EntryForm from './components/EntryForm';
 import Summary from './components/Summary';
@@ -16,7 +16,6 @@ import useNow from './hooks/useNow';
 const SUBSCRIPTION_SOURCES = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs', 'kids', 'settings'];
 
 const DEFAULT_SETTINGS = { feedingIntervalMinutes: 180, pumpingIntervalMinutes: 180 };
-const DEFAULT_REMINDER = { reminderEnabled: false, reminderTime: '20:00' };
 
 function buildSyncingStatus() {
   return SUBSCRIPTION_SOURCES.reduce((acc, src) => {
@@ -42,7 +41,6 @@ function App() {
   const [medicationLogs, setMedicationLogs] = useState(initialCache?.medicationLogs ?? []);
   const [kids, setKids] = useState(initialCache?.kids ?? []);
   const [settings, setSettings] = useState(initialCache?.settings ?? DEFAULT_SETTINGS);
-  const [reminderSettings, setReminderSettings] = useState(initialCache?.reminderSettings ?? DEFAULT_REMINDER);
 
   const [sourceStatus, setSourceStatus] = useState(() => (hasCache ? buildSyncingStatus() : {}));
   const [firstSyncDone, setFirstSyncDone] = useState(false);
@@ -68,7 +66,6 @@ function App() {
     setMedicationLogs([]);
     setKids([]);
     setSettings(DEFAULT_SETTINGS);
-    setReminderSettings(DEFAULT_REMINDER);
     setActiveKidId(null);
     setLastUpdated(null);
     setSourceStatus({});
@@ -97,10 +94,6 @@ function App() {
 
   useEffect(() => {
     if (!user) return;
-    getUserReminderSettings(user.uid)
-      .then(setReminderSettings)
-      .catch(console.error);
-
     if (family && initialCache?.userId === user.uid) {
       return;
     }
@@ -213,7 +206,6 @@ function App() {
         family,
         kids,
         settings,
-        reminderSettings,
         feedingEntries,
         diaperEntries,
         pumpingEntries,
@@ -224,7 +216,7 @@ function App() {
       });
     }, 500);
     return () => clearTimeout(handle);
-  }, [user, family, kids, settings, reminderSettings, feedingEntries, diaperEntries, pumpingEntries, vitaminDEntries, medicationLogs, activeKidId, sourceStatus]);
+  }, [user, family, kids, settings, feedingEntries, diaperEntries, pumpingEntries, vitaminDEntries, medicationLogs, activeKidId, sourceStatus]);
 
   useEffect(() => {
     if (kids.length > 0 && (!activeKidId || !kids.find((k) => k.id === activeKidId))) {
@@ -434,8 +426,6 @@ function App() {
         user={user}
         settings={settings}
         onSettingsChange={handleSettingsChange}
-        reminderSettings={reminderSettings}
-        onReminderSettingsChange={setReminderSettings}
         kids={kids}
         onAddKid={handleAddKid}
         onUpdateKid={handleUpdateKid}

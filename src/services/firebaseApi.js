@@ -156,35 +156,3 @@ export async function deleteKid(familyId, kidId) {
   await deleteDoc(doc(db, 'families', familyId, 'kids', kidId));
 }
 
-export async function saveFcmToken(familyId, token, userId, reminderTime) {
-  await setDoc(doc(db, 'families', familyId, 'fcmTokens', token), {
-    token,
-    userId,
-    reminderTime,
-    createdAt: serverTimestamp(),
-  });
-}
-
-export async function updateFcmTokenTime(familyId, token, reminderTime) {
-  await updateDoc(doc(db, 'families', familyId, 'fcmTokens', token), {
-    reminderTime,
-  });
-}
-
-export async function removeFcmToken(familyId, token) {
-  await deleteDoc(doc(db, 'families', familyId, 'fcmTokens', token));
-}
-
-export async function getUserReminderSettings(userId) {
-  const snap = await getDoc(doc(db, 'users', userId));
-  if (!snap.exists()) return { reminderEnabled: false, reminderTime: '20:00' };
-  const data = snap.data();
-  return {
-    reminderEnabled: data.reminderEnabled ?? false,
-    reminderTime: data.reminderTime ?? '20:00',
-  };
-}
-
-export async function updateUserReminderSettings(userId, settings) {
-  await setDoc(doc(db, 'users', userId), settings, { merge: true });
-}

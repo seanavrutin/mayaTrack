@@ -2189,43 +2189,6 @@ input {
   font-weight: 700;
 }
 
-/* ── Reminder Toggle ── */
-
-.reminder-toggle {
-  padding: 6px 18px;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 0.85rem;
-  transition: all 0.2s;
-  background: var(--border);
-  color: var(--text-muted);
-}
-
-.reminder-toggle.active {
-  background: var(--success);
-  color: white;
-}
-
-.reminder-toggle:disabled {
-  opacity: 0.5;
-  cursor: wait;
-}
-
-.reminder-time-input {
-  width: 100px;
-  padding: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  direction: ltr;
-}
-
-.reminder-denied-hint {
-  font-size: 0.8rem;
-  color: var(--secondary);
-  margin-top: 4px;
-  font-weight: 500;
-}
-
 /* ── Kid Card ── */
 
 .kid-card {

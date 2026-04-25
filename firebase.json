@@ -1,8 +1,4 @@
 {
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs22"
-  },
   "firestore": {
     "database": "maya-track-db",
     "rules": "firestore.rules"
