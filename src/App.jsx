@@ -1,122 +1,232 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './services/firebase';
 import { getUserFamily, subscribeToFamily, addEntry, updateEntry, deleteEntry, updateSetting, addKid, updateKid, deleteKid, getUserReminderSettings } from './services/firebaseApi';
+import { loadCache, saveCache, clearCache } from './services/cache';
 import EntryForm from './components/EntryForm';
 import Summary from './components/Summary';
 import SidePanel from './components/SidePanel';
 import SettingsModal from './components/SettingsModal';
 import LoginScreen from './components/LoginScreen';
 import FamilyScreen from './components/FamilyScreen';
+import SyncBanner from './components/SyncBanner';
 import useSwipe from './hooks/useSwipe';
 
-function App() {
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
+const SUBSCRIPTION_SOURCES = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs', 'kids', 'settings'];
 
-  const [family, setFamily] = useState(null);
+const DEFAULT_SETTINGS = { feedingIntervalMinutes: 180, pumpingIntervalMinutes: 180 };
+const DEFAULT_REMINDER = { reminderEnabled: false, reminderTime: '20:00' };
+
+function buildSyncingStatus() {
+  return SUBSCRIPTION_SOURCES.reduce((acc, src) => {
+    acc[src] = 'syncing';
+    return acc;
+  }, {});
+}
+
+function App() {
+  const initialCache = useMemo(() => loadCache(), []);
+  const hasCache = initialCache !== null;
+
+  const [user, setUser] = useState(null);
+  const [authResolved, setAuthResolved] = useState(false);
+
+  const [family, setFamily] = useState(initialCache?.family ?? null);
   const [familyLoading, setFamilyLoading] = useState(false);
 
-  const [feedingEntries, setFeedingEntries] = useState([]);
-  const [diaperEntries, setDiaperEntries] = useState([]);
-  const [pumpingEntries, setPumpingEntries] = useState([]);
-  const [vitaminDEntries, setVitaminDEntries] = useState([]);
-  const [medicationLogs, setMedicationLogs] = useState([]);
-  const [kids, setKids] = useState([]);
-  const [settings, setSettings] = useState({
-    feedingIntervalMinutes: 180,
-    pumpingIntervalMinutes: 180,
-  });
-  const [reminderSettings, setReminderSettings] = useState({
-    reminderEnabled: false,
-    reminderTime: '20:00',
-  });
-  const [dataReady, setDataReady] = useState(false);
+  const [feedingEntries, setFeedingEntries] = useState(initialCache?.feedingEntries ?? []);
+  const [diaperEntries, setDiaperEntries] = useState(initialCache?.diaperEntries ?? []);
+  const [pumpingEntries, setPumpingEntries] = useState(initialCache?.pumpingEntries ?? []);
+  const [vitaminDEntries, setVitaminDEntries] = useState(initialCache?.vitaminDEntries ?? []);
+  const [medicationLogs, setMedicationLogs] = useState(initialCache?.medicationLogs ?? []);
+  const [kids, setKids] = useState(initialCache?.kids ?? []);
+  const [settings, setSettings] = useState(initialCache?.settings ?? DEFAULT_SETTINGS);
+  const [reminderSettings, setReminderSettings] = useState(initialCache?.reminderSettings ?? DEFAULT_REMINDER);
 
-  const [activeKidId, setActiveKidId] = useState(null);
+  const [sourceStatus, setSourceStatus] = useState(() => (hasCache ? buildSyncingStatus() : {}));
+  const [firstSyncDone, setFirstSyncDone] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(initialCache?.lastUpdated ?? null);
+  const [showUpdatedToast, setShowUpdatedToast] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+
+  const [activeKidId, setActiveKidId] = useState(initialCache?.activeKidId ?? null);
   const [activeTab, setActiveTab] = useState('form');
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [slideDir, setSlideDir] = useState(null);
   const mainRef = useRef(null);
 
-  useEffect(() => {
-    return onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      setAuthLoading(false);
-    });
+  const resetAfterSignOut = useCallback(() => {
+    setFamily(null);
+    setFeedingEntries([]);
+    setDiaperEntries([]);
+    setPumpingEntries([]);
+    setVitaminDEntries([]);
+    setMedicationLogs([]);
+    setKids([]);
+    setSettings(DEFAULT_SETTINGS);
+    setReminderSettings(DEFAULT_REMINDER);
+    setActiveKidId(null);
+    setLastUpdated(null);
+    setSourceStatus({});
+    setFirstSyncDone(false);
+    setShowUpdatedToast(false);
   }, []);
 
   useEffect(() => {
-    if (!user) {
-      setFamily(null);
-      setFamilyLoading(false);
-      setReminderSettings({ reminderEnabled: false, reminderTime: '20:00' });
-      return;
-    }
-    setFamilyLoading(true);
-    getUserFamily(user.uid)
-      .then(setFamily)
-      .catch(console.error)
-      .finally(() => setFamilyLoading(false));
+    return onAuthStateChanged(auth, (firebaseUser) => {
+      setAuthResolved(true);
+      setUser(firebaseUser);
+
+      if (!firebaseUser) {
+        clearCache();
+        resetAfterSignOut();
+        return;
+      }
+
+      const cur = loadCache();
+      if (cur && cur.userId !== firebaseUser.uid) {
+        clearCache();
+        resetAfterSignOut();
+      }
+    });
+  }, [resetAfterSignOut]);
+
+  useEffect(() => {
+    if (!user) return;
     getUserReminderSettings(user.uid)
       .then(setReminderSettings)
       .catch(console.error);
-  }, [user]);
 
-  useEffect(() => {
-    if (!family?.familyId) {
-      setDataReady(false);
-      setFeedingEntries([]);
-      setDiaperEntries([]);
-      setPumpingEntries([]);
-      setVitaminDEntries([]);
-      setMedicationLogs([]);
-      setKids([]);
+    if (family && initialCache?.userId === user.uid) {
       return;
     }
 
-    const ready = { feedings: false, diapers: false, pumpings: false, vitaminD: false, medicationLogs: false, kids: false, settings: false };
-    function checkReady() {
-      if (Object.values(ready).every(Boolean)) setDataReady(true);
-    }
-
-    return subscribeToFamily(family.familyId, {
-      feedings: (entries) => { setFeedingEntries(entries); ready.feedings = true; checkReady(); },
-      diapers: (entries) => { setDiaperEntries(entries); ready.diapers = true; checkReady(); },
-      pumpings: (entries) => { setPumpingEntries(entries); ready.pumpings = true; checkReady(); },
-      vitaminD: (entries) => { setVitaminDEntries(entries); ready.vitaminD = true; checkReady(); },
-      medicationLogs: (entries) => { setMedicationLogs(entries); ready.medicationLogs = true; checkReady(); },
-      kids: (k) => { setKids(k); ready.kids = true; checkReady(); },
-      settings: (s) => {
-        setSettings({
-          feedingIntervalMinutes: s.feedingIntervalMinutes ?? 180,
-          pumpingIntervalMinutes: s.pumpingIntervalMinutes ?? 180,
-        });
-        ready.settings = true;
-        checkReady();
-      },
-    });
-  }, [family?.familyId]);
+    setFamilyLoading(true);
+    getUserFamily(user.uid)
+      .then((f) => {
+        if (f) setFamily(f);
+      })
+      .catch(console.error)
+      .finally(() => setFamilyLoading(false));
+  }, [user, family, initialCache]);
 
   useEffect(() => {
-    if (kids.length > 0 && (!activeKidId || !kids.find(k => k.id === activeKidId))) {
+    if (!family?.familyId) {
+      return;
+    }
+
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (offline) {
+      setSourceStatus(SUBSCRIPTION_SOURCES.reduce((acc, s) => { acc[s] = 'error'; return acc; }, {}));
+    } else {
+      setSourceStatus(buildSyncingStatus());
+    }
+    setFirstSyncDone(false);
+
+    const timeoutId = setTimeout(() => {
+      setSourceStatus((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const k of SUBSCRIPTION_SOURCES) {
+          if (next[k] === 'syncing') {
+            next[k] = 'error';
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 8000);
+
+    const unsub = subscribeToFamily(family.familyId, {
+      feedings: setFeedingEntries,
+      diapers: setDiaperEntries,
+      pumpings: setPumpingEntries,
+      vitaminD: setVitaminDEntries,
+      medicationLogs: setMedicationLogs,
+      kids: setKids,
+      settings: (s) => setSettings({
+        feedingIntervalMinutes: s.feedingIntervalMinutes ?? 180,
+        pumpingIntervalMinutes: s.pumpingIntervalMinutes ?? 180,
+      }),
+      onStatus: (source, status) => {
+        setSourceStatus((prev) => (prev[source] === status ? prev : { ...prev, [source]: status }));
+      },
+    });
+
+    return () => {
+      clearTimeout(timeoutId);
+      unsub();
+    };
+  }, [family?.familyId, retryKey]);
+
+  useEffect(() => {
+    const handleOnline = () => setRetryKey((k) => k + 1);
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
+  useEffect(() => {
+    if (firstSyncDone) return;
+    const states = SUBSCRIPTION_SOURCES.map((s) => sourceStatus[s]);
+    if (states.some((s) => !s || s === 'syncing')) return;
+
+    setFirstSyncDone(true);
+    if (states.every((s) => s === 'ok')) {
+      setShowUpdatedToast(true);
+    }
+  }, [sourceStatus, firstSyncDone]);
+
+  useEffect(() => {
+    if (!showUpdatedToast) return;
+    const t = setTimeout(() => setShowUpdatedToast(false), 2500);
+    return () => clearTimeout(t);
+  }, [showUpdatedToast]);
+
+  useEffect(() => {
+    if (!user || !family?.familyId) return;
+    const anyOk = Object.values(sourceStatus).some((s) => s === 'ok');
+    if (!anyOk) return;
+
+    const handle = setTimeout(() => {
+      const now = Date.now();
+      setLastUpdated(now);
+      saveCache({
+        userId: user.uid,
+        family,
+        kids,
+        settings,
+        reminderSettings,
+        feedingEntries,
+        diaperEntries,
+        pumpingEntries,
+        vitaminDEntries,
+        medicationLogs,
+        activeKidId,
+        lastUpdated: now,
+      });
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [user, family, kids, settings, reminderSettings, feedingEntries, diaperEntries, pumpingEntries, vitaminDEntries, medicationLogs, activeKidId, sourceStatus]);
+
+  useEffect(() => {
+    if (kids.length > 0 && (!activeKidId || !kids.find((k) => k.id === activeKidId))) {
       setActiveKidId(kids[0].id);
     }
   }, [kids, activeKidId]);
 
-  const activeKid = kids.find(k => k.id === activeKidId) || null;
+  const activeKid = kids.find((k) => k.id === activeKidId) || null;
 
-  const kidFeedingEntries = feedingEntries.filter(e => e.kidId === activeKidId || !e.kidId);
-  const kidDiaperEntries = diaperEntries.filter(e => e.kidId === activeKidId || !e.kidId);
+  const kidFeedingEntries = feedingEntries.filter((e) => e.kidId === activeKidId || !e.kidId);
+  const kidDiaperEntries = diaperEntries.filter((e) => e.kidId === activeKidId || !e.kidId);
 
-  const legacyVitaminDLogs = vitaminDEntries.map(e => ({
+  const legacyVitaminDLogs = vitaminDEntries.map((e) => ({
     medicationName: 'ויטמין D',
     kidId: activeKidId,
     time: e.time,
   }));
   const kidMedicationLogs = [
-    ...medicationLogs.filter(e => e.kidId === activeKidId),
+    ...medicationLogs.filter((e) => e.kidId === activeKidId),
     ...legacyVitaminDLogs,
   ];
 
@@ -152,6 +262,12 @@ function App() {
     await deleteKid(family.familyId, kidId);
   };
 
+  const handleRetrySync = useCallback(() => {
+    setSourceStatus(buildSyncingStatus());
+    setFirstSyncDone(false);
+    setRetryKey((k) => k + 1);
+  }, []);
+
   const switchTab = useCallback((tab, dir) => {
     if (tab === activeTab) return;
     setSlideDir(dir);
@@ -169,7 +285,7 @@ function App() {
     () => switchTab('summary', 'slide-left'),
   );
 
-  if (authLoading || familyLoading) {
+  if (!hasCache && !authResolved) {
     return (
       <div className="loading-screen">
         <div className="loading-spinner" />
@@ -178,16 +294,32 @@ function App() {
     );
   }
 
-  if (!user) {
+  if (authResolved && !user) {
     return <LoginScreen />;
   }
 
   if (!family) {
+    if (familyLoading) {
+      return (
+        <div className="loading-screen">
+          <div className="loading-spinner" />
+          <p>טוען...</p>
+        </div>
+      );
+    }
     return <FamilyScreen user={user} onFamilyReady={setFamily} />;
   }
 
+  const summaryLoading = !hasCache && !firstSyncDone;
+
   return (
     <div className="app">
+      <SyncBanner
+        sourceStatus={sourceStatus}
+        lastUpdated={lastUpdated}
+        showUpdatedToast={showUpdatedToast}
+        onRetry={handleRetrySync}
+      />
       <header className="app-header">
         <nav className="tabs">
           <button className={activeTab === 'form' ? 'active' : ''} onClick={() => switchTab('form', 'slide-right')}>
@@ -253,7 +385,7 @@ function App() {
               time: new Date().toISOString(),
             })}
             settings={settings}
-            loading={!dataReady}
+            loading={summaryLoading}
           />
         )}
       </main>

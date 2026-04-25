@@ -66,23 +66,39 @@ export async function getUserFamily(userId) {
 
 export function subscribeToFamily(familyId, callbacks) {
   const unsubs = [];
+  const notifyStatus = (source, status, err) => callbacks.onStatus?.(source, status, err);
 
   const cols = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs'];
   cols.forEach((col) => {
     const ref = collection(db, 'families', familyId, col);
     const q = query(ref, orderBy('time', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const entries = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      callbacks[col]?.(entries);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        if (snap.metadata.fromCache) return;
+        const entries = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        callbacks[col]?.(entries);
+        notifyStatus(col, 'ok');
+      },
+      (err) => {
+        console.error(`subscribeToFamily: ${col} listener error`, err);
+        notifyStatus(col, 'error', err);
+      },
+    );
     unsubs.push(unsub);
   });
 
   const kidsUnsub = onSnapshot(
     collection(db, 'families', familyId, 'kids'),
     (snap) => {
+      if (snap.metadata.fromCache) return;
       const kids = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       callbacks.kids?.(kids);
+      notifyStatus('kids', 'ok');
+    },
+    (err) => {
+      console.error('subscribeToFamily: kids listener error', err);
+      notifyStatus('kids', 'error', err);
     },
   );
   unsubs.push(kidsUnsub);
@@ -90,7 +106,13 @@ export function subscribeToFamily(familyId, callbacks) {
   const settingsUnsub = onSnapshot(
     doc(db, 'families', familyId, 'settings', 'general'),
     (snap) => {
+      if (snap.metadata.fromCache) return;
       callbacks.settings?.(snap.exists() ? snap.data() : {});
+      notifyStatus('settings', 'ok');
+    },
+    (err) => {
+      console.error('subscribeToFamily: settings listener error', err);
+      notifyStatus('settings', 'error', err);
     },
   );
   unsubs.push(settingsUnsub);
