@@ -22,6 +22,11 @@
   box-sizing: border-box;
 }
 
+html, body {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
@@ -48,6 +53,9 @@ input {
   margin: 0 auto;
   min-height: 100vh;
   position: relative;
+  overflow-x: clip;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Header ── */
@@ -156,6 +164,7 @@ input {
   padding: 16px;
   padding-bottom: 40px;
   overflow-x: hidden;
+  flex: 1;
 }
 
 .app-main.slide-left {
