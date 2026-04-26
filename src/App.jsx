@@ -48,6 +48,10 @@ function App() {
   const [showUpdatedToast, setShowUpdatedToast] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
 
+  const lastSubscribedFamilyRef = useRef(null);
+  const sourceStatusRef = useRef(sourceStatus);
+  const lastHiddenAtRef = useRef(null);
+
   const [activeKidId, setActiveKidId] = useState(initialCache?.activeKidId ?? null);
   const [activeTab, setActiveTab] = useState('form');
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
@@ -112,27 +116,34 @@ function App() {
       return;
     }
 
-    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-    if (offline) {
-      setSourceStatus(SUBSCRIPTION_SOURCES.reduce((acc, s) => { acc[s] = 'error'; return acc; }, {}));
-    } else {
-      setSourceStatus(buildSyncingStatus());
-    }
-    setFirstSyncDone(false);
+    const isNewFamily = lastSubscribedFamilyRef.current !== family.familyId;
+    lastSubscribedFamilyRef.current = family.familyId;
 
-    const timeoutId = setTimeout(() => {
-      setSourceStatus((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        for (const k of SUBSCRIPTION_SOURCES) {
-          if (next[k] === 'syncing') {
-            next[k] = 'error';
-            changed = true;
+    let timeoutId = null;
+
+    if (isNewFamily) {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      if (offline) {
+        setSourceStatus(SUBSCRIPTION_SOURCES.reduce((acc, s) => { acc[s] = 'error'; return acc; }, {}));
+      } else {
+        setSourceStatus(buildSyncingStatus());
+      }
+      setFirstSyncDone(false);
+
+      timeoutId = setTimeout(() => {
+        setSourceStatus((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          for (const k of SUBSCRIPTION_SOURCES) {
+            if (next[k] === 'syncing') {
+              next[k] = 'error';
+              changed = true;
+            }
           }
-        }
-        return changed ? next : prev;
-      });
-    }, 8000);
+          return changed ? next : prev;
+        });
+      }, 8000);
+    }
 
     const unsub = subscribeToFamily(family.familyId, {
       feedings: setFeedingEntries,
@@ -151,28 +162,49 @@ function App() {
     });
 
     return () => {
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
       unsub();
     };
   }, [family?.familyId, retryKey]);
 
   useEffect(() => {
-    const handleOnline = () => setRetryKey((k) => k + 1);
+    sourceStatusRef.current = sourceStatus;
+  }, [sourceStatus]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      const hasError = Object.values(sourceStatusRef.current).some((s) => s === 'error');
+      if (hasError) setRetryKey((k) => k + 1);
+    };
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   useEffect(() => {
-    const onResume = () => {
-      if (document.visibilityState === 'visible') {
-        setRetryKey((k) => k + 1);
+    const BACKGROUND_RETRY_THRESHOLD_MS = 10000;
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        lastHiddenAtRef.current = Date.now();
+        return;
       }
+      if (document.visibilityState !== 'visible') return;
+      const hiddenAt = lastHiddenAtRef.current;
+      lastHiddenAtRef.current = null;
+      const hiddenFor = hiddenAt ? Date.now() - hiddenAt : 0;
+      if (hiddenFor < BACKGROUND_RETRY_THRESHOLD_MS) return;
+      setRetryKey((k) => k + 1);
     };
-    document.addEventListener('visibilitychange', onResume);
-    window.addEventListener('pageshow', onResume);
+
+    const handlePageShow = (e) => {
+      if (e.persisted) setRetryKey((k) => k + 1);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pageshow', handlePageShow);
     return () => {
-      document.removeEventListener('visibilitychange', onResume);
-      window.removeEventListener('pageshow', onResume);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, []);
 
