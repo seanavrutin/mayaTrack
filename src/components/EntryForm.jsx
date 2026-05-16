@@ -170,16 +170,18 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
   }, [pumpSide, pumpTimerRunning, pumpTimerStart, pumpPausedElapsed, pumpSessionStart]);
 
   const doSave = async (section, addFn, entry, resetFn) => {
-    if (getStatus(section) === 'saving') return;
+    if (getStatus(section) === 'saving') return false;
     setStatus(section, 'saving');
-    retryRef.current[section] = () => doSave(section, addFn, entry, null);
+    retryRef.current[section] = () => doSave(section, addFn, entry, resetFn);
     try {
       await addFn(entry);
       setStatus(section, 'saved');
       retryRef.current[section] = null;
       if (resetFn) resetFn();
+      return true;
     } catch {
       setStatus(section, 'error');
+      return false;
     }
   };
 
@@ -197,12 +199,11 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
       } else {
         update.pumpedMilk = (lastFeeding.pumpedMilk || 0) + bottleAmount;
       }
-      doSave('bottle', () => onSupplementFeeding(lastFeeding.id, update), null, () => {
+      return doSave('bottle', () => onSupplementFeeding(lastFeeding.id, update), null, () => {
         setBottleAmount(0);
         setSupplementMode(false);
         resetTimeToNow();
       });
-      return;
     }
     const entry = {
       id: generateId(),
@@ -212,7 +213,7 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
       pumpedMilk: bottleType === 'pumpedMilk' ? bottleAmount : 0,
       breastfeedingMinutes: 0,
     };
-    doSave('bottle', onAddFeeding, entry, () => {
+    return doSave('bottle', onAddFeeding, entry, () => {
       setBottleAmount(0);
       resetTimeToNow();
     });
@@ -305,15 +306,16 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
   })();
 
   const handleSaveBreastfeeding = () => {
+    // Important: build the entry from a *snapshot* of the timer state without
+    // mutating any of it. If the save fails, the user must be able to retry
+    // without losing the running timer or any completed sessions. Cleanup
+    // only happens inside the success resetFn passed to doSave below.
     const buildBfData = () => {
       if (hasTimerSessions) {
         const savedStartTime = bfSessionStart || time.toISOString();
         const savedFirstBreast = firstBreast || activeBreast || 'right';
 
-        let lastSessionSeconds = 0;
-        if (timerRunning || timerPaused) {
-          lastSessionSeconds = stopCurrentTimer();
-        }
+        const lastSessionSeconds = (timerRunning || timerPaused) ? getElapsedSeconds() : 0;
         const endTime = new Date().toISOString();
 
         const allSeconds = [...rightSessions, ...leftSessions].reduce((a, b) => a + b, 0)
@@ -338,13 +340,12 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
         endTime: bfData.endTime,
         startedBreast: bfData.startedBreast,
       };
-      doSave('breastfeeding', () => onSupplementFeeding(lastFeeding.id, update), null, () => {
+      return doSave('breastfeeding', () => onSupplementFeeding(lastFeeding.id, update), null, () => {
         if (bfData.isTimer) resetAll();
         else { setManualStartTime(''); setManualEndTime(''); }
         setSupplementMode(false);
         resetTimeToNow();
       });
-      return;
     }
 
     const entry = {
@@ -358,7 +359,7 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
       endTime: bfData.endTime,
       startedBreast: bfData.startedBreast,
     };
-    doSave('breastfeeding', onAddFeeding, entry, () => {
+    return doSave('breastfeeding', onAddFeeding, entry, () => {
       if (bfData.isTimer) resetAll();
       else { setManualStartTime(''); setManualEndTime(''); }
       resetTimeToNow();
@@ -373,7 +374,7 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
       poop,
       empty: emptyDiaper,
     };
-    doSave('diaper', onAddDiaper, entry, () => {
+    return doSave('diaper', onAddDiaper, entry, () => {
       setPee(false);
       setPoop(false);
       setEmptyDiaper(false);
@@ -431,22 +432,21 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
         startTime: savedStartTime,
         endTime,
       };
-      doSave('pumping', onAddPumping, entry, () => {
+      return doSave('pumping', onAddPumping, entry, () => {
         resetPumpTimer();
         resetTimeToNow();
       });
-    } else {
-      const entry = {
-        id: generateId(),
-        time: time.toISOString(),
-        durationMinutes: pumpingMin,
-        side: pumpSide,
-      };
-      doSave('pumping', onAddPumping, entry, () => {
-        setPumpingMin(0);
-        resetTimeToNow();
-      });
     }
+    const entry = {
+      id: generateId(),
+      time: time.toISOString(),
+      durationMinutes: pumpingMin,
+      side: pumpSide,
+    };
+    return doSave('pumping', onAddPumping, entry, () => {
+      setPumpingMin(0);
+      resetTimeToNow();
+    });
   };
 
   const todayMedLogs = medicationLogs.filter(e => isToday(e.time, now));
@@ -486,10 +486,15 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
     { key: 'medications', emoji: '💊', label: 'תרופות' },
   ];
 
+  // Important: do NOT close the section until we know the save succeeded.
+  // If we close eagerly, the inline "didn't save — tap to retry" error state
+  // inside the section is hidden and the user thinks the entry was saved
+  // when it actually failed. That was the primary cause of records going
+  // missing (especially breastfeeding timer data).
   const wrappedSave = (saveFn) => {
-    return () => {
-      saveFn();
-      setOpenSection(null);
+    return async () => {
+      const ok = await saveFn();
+      if (ok) setOpenSection(null);
     };
   };
 

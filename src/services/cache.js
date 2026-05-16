@@ -1,6 +1,8 @@
 const CACHE_KEY = 'mayatrack:cache:v1';
 const CACHE_VERSION = 1;
 
+const FAILED_WRITES_KEY = 'mayatrack:failed-writes:v1';
+
 export function loadCache() {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
@@ -28,5 +30,31 @@ export function clearCache() {
     localStorage.removeItem(CACHE_KEY);
   } catch {
     /* ignore */
+  }
+}
+
+// Failed writes: persisted across reloads so a user can't lose a record by
+// closing the tab while a save was failing. Each entry has enough info to
+// retry the original Firestore operation later.
+export function loadFailedWrites() {
+  try {
+    const raw = localStorage.getItem(FAILED_WRITES_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveFailedWrites(list) {
+  try {
+    if (!list || list.length === 0) {
+      localStorage.removeItem(FAILED_WRITES_KEY);
+      return;
+    }
+    localStorage.setItem(FAILED_WRITES_KEY, JSON.stringify(list));
+  } catch (err) {
+    console.warn('cache: failed-writes save failed', err);
   }
 }

@@ -1702,6 +1702,107 @@ input {
   background: rgba(0, 0, 0, 0.14);
 }
 
+/* ── Failed writes banner (records that couldn't be saved) ── */
+
+.failed-writes-banner {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  background: #fdecea;
+  color: #b71c1c;
+  border-bottom: 1px solid rgba(183, 28, 28, 0.18);
+  padding: 8px 14px 10px;
+  animation: sync-banner-slide 0.25s ease-out;
+}
+
+.failed-writes-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.failed-writes-icon {
+  display: inline-block;
+  font-weight: 700;
+}
+
+.failed-writes-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.failed-writes-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.failed-writes-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failed-writes-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.failed-writes-retry {
+  background: #b71c1c;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.failed-writes-retry:hover:not(:disabled) {
+  background: #931616;
+}
+
+.failed-writes-retry:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.failed-writes-dismiss {
+  background: transparent;
+  color: inherit;
+  border: none;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.failed-writes-dismiss:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.failed-writes-dismiss:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 /* ── Setup screen ── */
 
 .setup-screen {

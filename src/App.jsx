@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './services/firebase';
 import { getUserFamily, subscribeToFamily, addEntry, updateEntry, deleteEntry, updateSetting, addKid, updateKid, deleteKid } from './services/firebaseApi';
-import { loadCache, saveCache, clearCache } from './services/cache';
+import { loadCache, saveCache, clearCache, loadFailedWrites, saveFailedWrites } from './services/cache';
 import EntryForm from './components/EntryForm';
 import Summary from './components/Summary';
 import SidePanel from './components/SidePanel';
@@ -10,6 +10,7 @@ import SettingsModal from './components/SettingsModal';
 import LoginScreen from './components/LoginScreen';
 import FamilyScreen from './components/FamilyScreen';
 import SyncBanner from './components/SyncBanner';
+import FailedWritesBanner from './components/FailedWritesBanner';
 import useSwipe from './hooks/useSwipe';
 import useNow from './hooks/useNow';
 
@@ -58,6 +59,15 @@ function App() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [slideDir, setSlideDir] = useState(null);
   const mainRef = useRef(null);
+
+  // Failed Firestore writes (per-record, persisted to localStorage). Survives
+  // tab close / reload, so a user can't lose a record by walking away from
+  // a half-saved entry. Auto-retried on app boot, online events, and via the
+  // banner's "נסה שוב" button.
+  const [failedWrites, setFailedWrites] = useState(() => loadFailedWrites());
+  useEffect(() => {
+    saveFailedWrites(failedWrites);
+  }, [failedWrites]);
 
   const { now, tick } = useNow(30_000);
 
@@ -271,17 +281,107 @@ function App() {
     ...legacyVitaminDLogs,
   ];
 
-  const handleAddEntry = async (collectionName, entry) => {
-    await addEntry(family.familyId, collectionName, entry);
-  };
+  const recordFailure = useCallback((failure) => {
+    setFailedWrites((prev) => {
+      const filtered = prev.filter((f) => f.id !== failure.id);
+      return [...filtered, failure];
+    });
+  }, []);
 
-  const handleUpdateEntry = async (collectionName, id, data) => {
-    await updateEntry(family.familyId, collectionName, id, data);
-  };
+  const dismissFailure = useCallback((id) => {
+    setFailedWrites((prev) => prev.filter((f) => f.id !== id));
+  }, []);
 
-  const handleDeleteEntry = async (collectionName, id) => {
-    await deleteEntry(family.familyId, collectionName, id);
-  };
+  const familyId = family?.familyId;
+
+  const handleAddEntry = useCallback(async (collectionName, entry) => {
+    try {
+      await addEntry(familyId, collectionName, entry);
+      const expectedId = entry?.id ? `add:${collectionName}:${entry.id}` : null;
+      if (expectedId) {
+        setFailedWrites((prev) => prev.filter((f) => f.id !== expectedId));
+      }
+    } catch (err) {
+      const id = entry?.id
+        ? `add:${collectionName}:${entry.id}`
+        : `add:${collectionName}:${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      recordFailure({
+        id,
+        op: 'add',
+        collectionName,
+        entry,
+        familyId,
+        timestamp: Date.now(),
+      });
+      throw err;
+    }
+  }, [familyId, recordFailure]);
+
+  const handleUpdateEntry = useCallback(async (collectionName, id, data) => {
+    try {
+      await updateEntry(familyId, collectionName, id, data);
+    } catch (err) {
+      recordFailure({
+        id: `update:${collectionName}:${id}:${Date.now()}`,
+        op: 'update',
+        collectionName,
+        entryId: id,
+        data,
+        familyId,
+        timestamp: Date.now(),
+      });
+      throw err;
+    }
+  }, [familyId, recordFailure]);
+
+  const handleDeleteEntry = useCallback(async (collectionName, id) => {
+    try {
+      await deleteEntry(familyId, collectionName, id);
+    } catch (err) {
+      recordFailure({
+        id: `delete:${collectionName}:${id}:${Date.now()}`,
+        op: 'delete',
+        collectionName,
+        entryId: id,
+        familyId,
+        timestamp: Date.now(),
+      });
+      throw err;
+    }
+  }, [familyId, recordFailure]);
+
+  const retryFailedWrite = useCallback(async (failure) => {
+    try {
+      if (failure.op === 'add') {
+        await addEntry(failure.familyId, failure.collectionName, failure.entry);
+      } else if (failure.op === 'update') {
+        await updateEntry(failure.familyId, failure.collectionName, failure.entryId, failure.data);
+      } else if (failure.op === 'delete') {
+        await deleteEntry(failure.familyId, failure.collectionName, failure.entryId);
+      }
+      setFailedWrites((prev) => prev.filter((f) => f.id !== failure.id));
+      return true;
+    } catch (err) {
+      console.warn('retry failed', err);
+      return false;
+    }
+  }, []);
+
+  // Auto-retry pending failures whenever the browser reports it's back online.
+  // Firestore's persistent cache handles this on its own for cache-queued
+  // writes, but we still own the outbox for failures that bypassed the cache
+  // (auth errors, rule rejections, IndexedDB unavailable, etc.).
+  useEffect(() => {
+    if (failedWrites.length === 0) return;
+    const tryAll = () => {
+      failedWrites.forEach((f) => { retryFailedWrite(f); });
+    };
+    const handleOnline = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine !== false) tryAll();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [failedWrites, retryFailedWrite]);
 
   const handleSettingsChange = (newSettings) => {
     Object.entries(newSettings).forEach(([key, value]) => {
@@ -361,6 +461,11 @@ function App() {
         lastUpdated={lastUpdated}
         showUpdatedToast={showUpdatedToast}
         onRetry={handleRetrySync}
+      />
+      <FailedWritesBanner
+        failedWrites={failedWrites}
+        onRetry={retryFailedWrite}
+        onDismiss={dismissFailure}
       />
       <header className="app-header">
         <nav className="tabs">
