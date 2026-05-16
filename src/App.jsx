@@ -14,9 +14,13 @@ import FailedWritesBanner from './components/FailedWritesBanner';
 import useSwipe from './hooks/useSwipe';
 import useNow from './hooks/useNow';
 
-const SUBSCRIPTION_SOURCES = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs', 'kids', 'settings'];
+const SUBSCRIPTION_SOURCES = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs', 'sleeps', 'kids', 'settings'];
 
-const DEFAULT_SETTINGS = { feedingIntervalMinutes: 180, pumpingIntervalMinutes: 180 };
+const DEFAULT_SETTINGS = {
+  feedingIntervalMinutes: 180,
+  pumpingIntervalMinutes: 180,
+  awakeAlertMinutes: 180,
+};
 
 function buildSyncingStatus() {
   return SUBSCRIPTION_SOURCES.reduce((acc, src) => {
@@ -40,6 +44,7 @@ function App() {
   const [pumpingEntries, setPumpingEntries] = useState(initialCache?.pumpingEntries ?? []);
   const [vitaminDEntries, setVitaminDEntries] = useState(initialCache?.vitaminDEntries ?? []);
   const [medicationLogs, setMedicationLogs] = useState(initialCache?.medicationLogs ?? []);
+  const [sleepEntries, setSleepEntries] = useState(initialCache?.sleepEntries ?? []);
   const [kids, setKids] = useState(initialCache?.kids ?? []);
   const [settings, setSettings] = useState(initialCache?.settings ?? DEFAULT_SETTINGS);
 
@@ -78,6 +83,7 @@ function App() {
     setPumpingEntries([]);
     setVitaminDEntries([]);
     setMedicationLogs([]);
+    setSleepEntries([]);
     setKids([]);
     setSettings(DEFAULT_SETTINGS);
     setActiveKidId(null);
@@ -161,10 +167,12 @@ function App() {
       pumpings: setPumpingEntries,
       vitaminD: setVitaminDEntries,
       medicationLogs: setMedicationLogs,
+      sleeps: setSleepEntries,
       kids: setKids,
       settings: (s) => setSettings({
         feedingIntervalMinutes: s.feedingIntervalMinutes ?? 180,
         pumpingIntervalMinutes: s.pumpingIntervalMinutes ?? 180,
+        awakeAlertMinutes: s.awakeAlertMinutes ?? 180,
       }),
       onStatus: (source, status) => {
         setSourceStatus((prev) => (prev[source] === status ? prev : { ...prev, [source]: status }));
@@ -253,12 +261,13 @@ function App() {
         pumpingEntries,
         vitaminDEntries,
         medicationLogs,
+        sleepEntries,
         activeKidId,
         lastUpdated: now,
       });
     }, 500);
     return () => clearTimeout(handle);
-  }, [user, family, kids, settings, feedingEntries, diaperEntries, pumpingEntries, vitaminDEntries, medicationLogs, activeKidId, sourceStatus]);
+  }, [user, family, kids, settings, feedingEntries, diaperEntries, pumpingEntries, vitaminDEntries, medicationLogs, sleepEntries, activeKidId, sourceStatus]);
 
   useEffect(() => {
     if (kids.length > 0 && (!activeKidId || !kids.find((k) => k.id === activeKidId))) {
@@ -270,6 +279,7 @@ function App() {
 
   const kidFeedingEntries = feedingEntries.filter((e) => e.kidId === activeKidId || !e.kidId);
   const kidDiaperEntries = diaperEntries.filter((e) => e.kidId === activeKidId || !e.kidId);
+  const kidSleepEntries = sleepEntries.filter((e) => e.kidId === activeKidId || !e.kidId);
 
   const legacyVitaminDLogs = vitaminDEntries.map((e) => ({
     medicationName: 'ויטמין D',
@@ -508,9 +518,13 @@ function App() {
             onSupplementFeeding={(id, data) => handleUpdateEntry('feedings', id, data)}
             onAddDiaper={(e) => handleAddEntry('diapers', { ...e, kidId: activeKidId })}
             onAddPumping={(e) => handleAddEntry('pumpings', e)}
+            onAddSleep={(e) => handleAddEntry('sleeps', { ...e, kidId: activeKidId })}
+            onUpdateSleep={(id, data) => handleUpdateEntry('sleeps', id, data)}
+            sleepEntries={kidSleepEntries}
             feedingEntries={kidFeedingEntries}
             medications={activeKid?.medications || []}
             medicationLogs={kidMedicationLogs}
+            settings={settings}
             onLogMedication={(medName) => handleAddEntry('medicationLogs', {
               id: Date.now().toString(36) + Math.random().toString(36).slice(2),
               kidId: activeKidId,
@@ -526,6 +540,7 @@ function App() {
             feedingEntries={kidFeedingEntries}
             diaperEntries={kidDiaperEntries}
             pumpingEntries={pumpingEntries}
+            sleepEntries={kidSleepEntries}
             medications={activeKid?.medications || []}
             medicationLogs={kidMedicationLogs}
             onLogMedication={(medName) => handleAddEntry('medicationLogs', {
@@ -546,10 +561,13 @@ function App() {
         feedingEntries={kidFeedingEntries}
         diaperEntries={kidDiaperEntries}
         pumpingEntries={pumpingEntries}
+        sleepEntries={kidSleepEntries}
         medicationLogs={kidMedicationLogs}
         onDeleteFeeding={(id) => handleDeleteEntry('feedings', id)}
         onDeleteDiaper={(id) => handleDeleteEntry('diapers', id)}
         onDeletePumping={(id) => handleDeleteEntry('pumpings', id)}
+        onDeleteSleep={(id) => handleDeleteEntry('sleeps', id)}
+        onUpdateSleep={(id, data) => handleUpdateEntry('sleeps', id, data)}
         onDeleteMedicationLog={(id) => handleDeleteEntry('medicationLogs', id)}
         family={family}
         activeKid={activeKid}

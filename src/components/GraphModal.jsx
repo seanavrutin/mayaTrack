@@ -119,11 +119,60 @@ function computePumpingData(pumpingEntries) {
   }));
 }
 
+// Distributes a sleep session's minutes across each calendar day it spans
+// (handles cross-midnight sessions correctly). Open sessions (no endTime)
+// are treated as ending "now".
+function computeSleepData(sleepEntries) {
+  if (!sleepEntries.length) return [];
+  const dayMinutes = {};
+  const ensureDay = (key) => { if (!(key in dayMinutes)) dayMinutes[key] = 0; };
+
+  for (const e of sleepEntries) {
+    if (!e?.startTime) continue;
+    let cursor = new Date(e.startTime);
+    const end = e.endTime ? new Date(e.endTime) : new Date();
+    if (end <= cursor) continue;
+
+    while (cursor < end) {
+      const dayEnd = new Date(cursor);
+      dayEnd.setHours(24, 0, 0, 0); // start of next day
+      const segmentEnd = end < dayEnd ? end : dayEnd;
+      const minutes = Math.round((segmentEnd - cursor) / 60_000);
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+      ensureDay(key);
+      dayMinutes[key] += minutes;
+      cursor = dayEnd;
+    }
+  }
+
+  const sortedKeys = Object.keys(dayMinutes).sort();
+  if (sortedKeys.length === 0) return [];
+  const start = parseDateKey(sortedKeys[0]);
+  const end = parseDateKey(sortedKeys[sortedKeys.length - 1]);
+  const result = [];
+  const current = new Date(start);
+  while (current <= end) {
+    const y = current.getFullYear();
+    const m = String(current.getMonth() + 1).padStart(2, '0');
+    const d = String(current.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${d}`;
+    result.push({
+      date: formatDateLabel(key),
+      dateKey: key,
+      hours: Math.round(((dayMinutes[key] || 0) / 60) * 10) / 10,
+      minutes: dayMinutes[key] || 0,
+    });
+    current.setDate(current.getDate() + 1);
+  }
+  return result;
+}
+
 export default function GraphModal({
   type,
   diaperEntries = [],
   feedingEntries = [],
   pumpingEntries = [],
+  sleepEntries = [],
   onClose,
 }) {
   const scrollRef = useRef(null);
@@ -190,10 +239,23 @@ export default function GraphModal({
           summary: totalDays > 0 ? `ממוצע: ${avgSessions} שאיבות ביום` : 'אין נתונים (ימים שלמים)',
         };
       }
+      case 'sleep': {
+        const d = computeSleepData(sleepEntries);
+        const today = todayKey();
+        const completed = d.filter((x) => x.dateKey !== today);
+        const totalMinutes = completed.reduce((s, x) => s + x.minutes, 0);
+        const totalDays = completed.length;
+        const avgHours = totalDays > 0 ? (totalMinutes / totalDays / 60).toFixed(1) : 0;
+        return {
+          data: d,
+          title: '😴 גרף שינה',
+          summary: totalDays > 0 ? `ממוצע: ${avgHours} שעות ביום` : 'אין נתונים (ימים שלמים)',
+        };
+      }
       default:
         return { data: [], title: '', summary: '' };
     }
-  }, [type, diaperEntries, feedingEntries, pumpingEntries]);
+  }, [type, diaperEntries, feedingEntries, pumpingEntries, sleepEntries]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -279,6 +341,22 @@ export default function GraphModal({
             <YAxis unit="׳" allowDecimals={false} tick={AXIS_TICK} tickLine={false} axisLine={false} width={36} />
             <Tooltip cursor={cursorStyle} content={<ChartTooltip unit="דקות" />} />
             <Bar dataKey="minutes" fill="url(#grad-pumping)" radius={[8, 8, 0, 0]} maxBarSize={36} />
+          </BarChart>
+        );
+      case 'sleep':
+        return (
+          <BarChart width={chartWidth} height={CHART_HEIGHT} data={data} margin={CHART_MARGIN}>
+            <defs>
+              <linearGradient id="grad-sleep" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#9575cd" stopOpacity={0.95} />
+                <stop offset="100%" stopColor="#7e57c2" stopOpacity={0.85} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
+            <XAxis dataKey="date" tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: GRID_STROKE }} />
+            <YAxis unit="h" allowDecimals tick={AXIS_TICK} tickLine={false} axisLine={false} width={36} />
+            <Tooltip cursor={cursorStyle} content={<ChartTooltip unit="שעות" />} />
+            <Bar dataKey="hours" fill="url(#grad-sleep)" radius={[8, 8, 0, 0]} maxBarSize={36} />
           </BarChart>
         );
       default:

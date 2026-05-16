@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { logOut } from '../services/firebase';
 import GraphModal from './GraphModal';
+import { formatDurationHM } from '../utils/sleep';
 
 function fmt(isoString) {
+  if (!isoString) return '';
   const d = new Date(isoString);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function fmtDate(isoString) {
+  if (!isoString) return '';
   const d = new Date(isoString);
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
@@ -16,8 +19,26 @@ const TABLE_TITLES = {
   feeding: '🍼 טבלת אוכל',
   diaper: '🚼 טבלת טיטול',
   pumping: '🧴 טבלת שאיבה',
+  sleep: '😴 טבלת שינה',
   medications: '💊 טבלת תרופות',
 };
+
+// Build the "YYYY-MM-DDTHH:mm" string a datetime-local input expects, in
+// the user's local timezone (NOT UTC — datetime-local has no timezone).
+function toLocalDateTimeInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalDateTimeInput(localStr) {
+  if (!localStr) return null;
+  // datetime-local strings are interpreted as local time by the Date ctor.
+  const d = new Date(localStr);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
 
 export default function SidePanel({
   isOpen,
@@ -25,10 +46,13 @@ export default function SidePanel({
   feedingEntries,
   diaperEntries,
   pumpingEntries,
+  sleepEntries = [],
   medicationLogs = [],
   onDeleteFeeding,
   onDeleteDiaper,
   onDeletePumping,
+  onDeleteSleep,
+  onUpdateSleep,
   onDeleteMedicationLog,
   family,
   activeKid,
@@ -39,6 +63,64 @@ export default function SidePanel({
   const [openSection, setOpenSection] = useState('tables');
   const tablesOpen = openSection === 'tables';
   const graphsOpen = openSection === 'graphs';
+
+  const [editingSleep, setEditingSleep] = useState(null);
+  const [editSleepStart, setEditSleepStart] = useState('');
+  const [editSleepEnd, setEditSleepEnd] = useState('');
+  const [editSleepBusy, setEditSleepBusy] = useState(false);
+  const [editSleepError, setEditSleepError] = useState(null);
+
+  const openSleepEditor = (entry) => {
+    setEditingSleep(entry);
+    setEditSleepStart(toLocalDateTimeInput(entry.startTime));
+    setEditSleepEnd(toLocalDateTimeInput(entry.endTime));
+    setEditSleepError(null);
+  };
+
+  const closeSleepEditor = () => {
+    if (editSleepBusy) return;
+    setEditingSleep(null);
+    setEditSleepStart('');
+    setEditSleepEnd('');
+    setEditSleepError(null);
+  };
+
+  const saveSleepEdit = async () => {
+    if (!editingSleep || editSleepBusy) return;
+    const startIso = fromLocalDateTimeInput(editSleepStart);
+    if (!startIso) {
+      setEditSleepError('שעת התחלה לא תקינה');
+      return;
+    }
+    const endIso = editSleepEnd ? fromLocalDateTimeInput(editSleepEnd) : null;
+    if (editSleepEnd && !endIso) {
+      setEditSleepError('שעת סיום לא תקינה');
+      return;
+    }
+    if (endIso && new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+      setEditSleepError('הסיום חייב להיות אחרי ההתחלה');
+      return;
+    }
+    setEditSleepBusy(true);
+    setEditSleepError(null);
+    try {
+      // Always send `time` alongside `startTime` so the subscription's
+      // orderBy('time') still sees the doc after the edit.
+      await onUpdateSleep(editingSleep.id, {
+        time: startIso,
+        startTime: startIso,
+        endTime: endIso,
+      });
+      setEditingSleep(null);
+      setEditSleepStart('');
+      setEditSleepEnd('');
+    } catch (err) {
+      console.warn('sleep edit failed', err);
+      setEditSleepError('השמירה נכשלה — נסי שוב');
+    } finally {
+      setEditSleepBusy(false);
+    }
+  };
 
   return (
     <>
@@ -65,6 +147,7 @@ export default function SidePanel({
               <button className="table-btn" onClick={() => setActiveTable('feeding')}>🍼 אוכל</button>
               <button className="table-btn" onClick={() => setActiveTable('diaper')}>🚼 טיטול</button>
               <button className="table-btn" onClick={() => setActiveTable('pumping')}>🧴 שאיבה</button>
+              <button className="table-btn" onClick={() => setActiveTable('sleep')}>😴 שינה</button>
               <button className="table-btn" onClick={() => setActiveTable('medications')}>💊 תרופות</button>
             </div>
           )}
@@ -79,6 +162,7 @@ export default function SidePanel({
               <button className="graph-btn" onClick={() => setActiveGraph('poop')}>💩 קקי</button>
               <button className="graph-btn" onClick={() => setActiveGraph('food')}>🍼 אוכל</button>
               <button className="graph-btn" onClick={() => setActiveGraph('pumping')}>🧴 שאיבה</button>
+              <button className="graph-btn" onClick={() => setActiveGraph('sleep')}>😴 שינה</button>
             </div>
           )}
 
@@ -96,8 +180,72 @@ export default function SidePanel({
           diaperEntries={diaperEntries}
           feedingEntries={feedingEntries}
           pumpingEntries={pumpingEntries}
+          sleepEntries={sleepEntries}
           onClose={() => setActiveGraph(null)}
         />
+      )}
+
+      {editingSleep && (
+        <>
+          <div className="modal-overlay sleep-edit-overlay" onClick={closeSleepEditor} />
+          <div className="modal sleep-edit-modal">
+            <div className="modal-header">
+              <h2>✏️ עריכת שינה</h2>
+              <button className="close-btn" onClick={closeSleepEditor} disabled={editSleepBusy}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="sleep-edit-field">
+                <label>התחלה</label>
+                <input
+                  type="datetime-local"
+                  className="sleep-edit-input"
+                  value={editSleepStart}
+                  onChange={(e) => setEditSleepStart(e.target.value)}
+                />
+              </div>
+              <div className="sleep-edit-field">
+                <label>סיום (השאירי ריק לשינה פעילה)</label>
+                <input
+                  type="datetime-local"
+                  className="sleep-edit-input"
+                  value={editSleepEnd}
+                  onChange={(e) => setEditSleepEnd(e.target.value)}
+                />
+                {editSleepEnd && (
+                  <button
+                    type="button"
+                    className="sleep-edit-clear-end"
+                    onClick={() => setEditSleepEnd('')}
+                    disabled={editSleepBusy}
+                  >
+                    נקי סיום (סמן כפעיל)
+                  </button>
+                )}
+              </div>
+              {editSleepError && (
+                <p className="sleep-edit-error">⚠ {editSleepError}</p>
+              )}
+              <div className="sleep-edit-actions">
+                <button
+                  type="button"
+                  className="sleep-edit-save"
+                  onClick={saveSleepEdit}
+                  disabled={editSleepBusy}
+                >
+                  {editSleepBusy ? 'שומר...' : 'שמור'}
+                </button>
+                <button
+                  type="button"
+                  className="sleep-edit-cancel"
+                  onClick={closeSleepEditor}
+                  disabled={editSleepBusy}
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {activeTable && (
@@ -209,6 +357,48 @@ export default function SidePanel({
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+
+              {activeTable === 'sleep' && (
+                sleepEntries.length === 0 ? (
+                  <p className="no-data">אין נתונים עדיין</p>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>תאריך</th>
+                        <th>התחלה</th>
+                        <th>סיום</th>
+                        <th>משך</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sleepEntries.map((e) => {
+                        const isOpen = !e.endTime;
+                        const durationMs = isOpen
+                          ? 0
+                          : new Date(e.endTime).getTime() - new Date(e.startTime).getTime();
+                        return (
+                          <tr key={e.id}>
+                            <td className="cell-date">{fmtDate(e.startTime)}</td>
+                            <td className="cell-time">{fmt(e.startTime)}</td>
+                            <td className="cell-time">
+                              {isOpen ? <span className="badge badge-side">פעיל</span> : fmt(e.endTime)}
+                            </td>
+                            <td className="cell-num">
+                              {isOpen ? <span className="cell-dash">—</span> : formatDurationHM(durationMs)}
+                            </td>
+                            <td className="cell-action cell-action-pair">
+                              <button className="edit-btn" onClick={() => openSleepEditor(e)} aria-label="ערוך" title="ערוך">✏️</button>
+                              <button className="delete-btn" onClick={() => onDeleteSleep(e.id)} aria-label="מחק">✕</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 )

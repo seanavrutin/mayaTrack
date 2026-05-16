@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import NumberStepper from './NumberStepper';
 import TimeInput from './TimeInput';
+import SleepPill from './SleepPill';
+import { getActiveSleep } from '../utils/sleep';
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -43,7 +45,21 @@ function isToday(isoString, nowMs) {
 
 const MANUAL_EDIT_GRACE_MS = 2 * 60 * 1000;
 
-export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAddDiaper, onAddPumping, feedingEntries = [], medications = [], medicationLogs = [], onLogMedication }) {
+export default function EntryForm({
+  now,
+  onAddFeeding,
+  onSupplementFeeding,
+  onAddDiaper,
+  onAddPumping,
+  onAddSleep,
+  onUpdateSleep,
+  feedingEntries = [],
+  sleepEntries = [],
+  medications = [],
+  medicationLogs = [],
+  settings = {},
+  onLogMedication,
+}) {
   const [time, setTime] = useState(() => new Date());
   const [manualEditedAt, setManualEditedAt] = useState(null);
 
@@ -449,6 +465,77 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
     });
   };
 
+  // --- Sleep state ---
+  // The pill above drives the common case (one-tap start/end). The tile here
+  // is for manual past entries and for editing the currently active sleep
+  // (correct start time, end at a specific past time).
+  const activeSleep = getActiveSleep(sleepEntries);
+  const [manualSleepStart, setManualSleepStart] = useState('');
+  const [manualSleepEnd, setManualSleepEnd] = useState('');
+  const [editSleepStart, setEditSleepStart] = useState('');
+  const [editSleepEnd, setEditSleepEnd] = useState('');
+
+  const buildSleepDateTime = (timeStr, baseDateIso) => {
+    if (!timeStr) return null;
+    const [h, m] = timeStr.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return null;
+    const base = baseDateIso ? new Date(baseDateIso) : new Date(time);
+    const d = new Date(base);
+    d.setHours(h, m, 0, 0);
+    // If the resulting time is after "now", assume it was on the previous day
+    // (e.g. user enters 23:30 at 00:10 — they mean last night, not future).
+    // We use the `now` prop (ticked by useNow in the parent) instead of
+    // Date.now() so the function is render-safe.
+    if (d.getTime() > now + 60_000) {
+      d.setDate(d.getDate() - 1);
+    }
+    return d.toISOString();
+  };
+
+  const handleSaveManualSleep = () => {
+    const start = buildSleepDateTime(manualSleepStart);
+    const end = buildSleepDateTime(manualSleepEnd);
+    if (!start || !end) return Promise.resolve(false);
+    let startDate = new Date(start);
+    const endDate = new Date(end);
+    // Handle "started yesterday evening, ended this morning" — if end < start
+    // on the same day, push start back a day.
+    if (endDate.getTime() <= startDate.getTime()) {
+      startDate = new Date(startDate.getTime() - 24 * 60 * 60_000);
+    }
+    const entry = {
+      id: generateId(),
+      time: startDate.toISOString(),
+      startTime: startDate.toISOString(),
+      endTime: endDate.toISOString(),
+    };
+    return doSave('sleep', onAddSleep, entry, () => {
+      setManualSleepStart('');
+      setManualSleepEnd('');
+    });
+  };
+
+  const handleSaveSleepEdit = () => {
+    if (!activeSleep) return Promise.resolve(false);
+    const update = {};
+    if (editSleepStart) {
+      const newStart = buildSleepDateTime(editSleepStart, activeSleep.startTime);
+      if (newStart) {
+        update.startTime = newStart;
+        update.time = newStart;
+      }
+    }
+    if (editSleepEnd) {
+      const newEnd = buildSleepDateTime(editSleepEnd, activeSleep.startTime);
+      if (newEnd) update.endTime = newEnd;
+    }
+    if (Object.keys(update).length === 0) return Promise.resolve(false);
+    return doSave('sleep-edit', () => onUpdateSleep(activeSleep.id, update), null, () => {
+      setEditSleepStart('');
+      setEditSleepEnd('');
+    });
+  };
+
   const todayMedLogs = medicationLogs.filter(e => isToday(e.time, now));
 
   const getMedTakenToday = (medName) =>
@@ -483,6 +570,7 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
     { key: 'breastfeeding', emoji: '🤱', label: 'הנקה' },
     { key: 'diaper', emoji: '🚼', label: 'טיטול' },
     { key: 'pumping', emoji: '🧴', label: 'שאיבה' },
+    { key: 'sleep', emoji: '😴', label: 'שינה' },
     { key: 'medications', emoji: '💊', label: 'תרופות' },
   ];
 
@@ -500,6 +588,15 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
 
   return (
     <div className="entry-form">
+      <SleepPill
+        sleepEntries={sleepEntries}
+        now={now}
+        formTime={time}
+        awakeAlertMinutes={settings.awakeAlertMinutes}
+        onStartSleep={(entry) => onAddSleep({ ...entry, id: generateId() })}
+        onEndSleep={onUpdateSleep}
+      />
+
       <div className="card">
         <TimeInput value={time} onChange={handleTimeChange} />
       </div>
@@ -814,6 +911,83 @@ export default function EntryForm({ now, onAddFeeding, onSupplementFeeding, onAd
               <button type="button" className="bf-timer-btn reset" onClick={resetPumpTimer}>
                 ✕ איפוס
               </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {openSection === 'sleep' && (
+        <div className="card section-expanded">
+          <div className="card-title">😴 שינה</div>
+          <div className="section-fields">
+            {activeSleep ? (
+              <div className="sleep-edit-active">
+                <p className="sleep-edit-hint">
+                  כרגע מסומנת כישנה (התחילה ב-{new Date(activeSleep.startTime).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}).
+                  אפשר לתקן את שעת ההתחלה, או לסיים בשעה אחרת מ"עכשיו".
+                </p>
+                <div className="bf-manual-times">
+                  <div className="bf-manual-field">
+                    <label>התחלה חדשה</label>
+                    <input
+                      type="time"
+                      className="bf-time-input"
+                      value={editSleepStart}
+                      onChange={(e) => setEditSleepStart(e.target.value)}
+                    />
+                  </div>
+                  <span className="bf-manual-arrow">→</span>
+                  <div className="bf-manual-field">
+                    <label>סיום בשעה</label>
+                    <input
+                      type="time"
+                      className="bf-time-input"
+                      value={editSleepEnd}
+                      onChange={(e) => setEditSleepEnd(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <SaveButton
+                  status={getStatus('sleep-edit')}
+                  onClick={wrappedSave(handleSaveSleepEdit)}
+                  onRetry={() => handleRetry('sleep-edit')}
+                  label="עדכן שינה נוכחית"
+                />
+              </div>
+            ) : (
+              <div className="sleep-manual">
+                <p className="sleep-edit-hint">
+                  להוספת שינה שלא נרשמה בזמן אמת — מלאו שעת התחלה וסיום.
+                  אם הסיום לפני ההתחלה, ההתחלה תיחשב אתמול.
+                </p>
+                <div className="bf-manual-times">
+                  <div className="bf-manual-field">
+                    <label>התחלה</label>
+                    <input
+                      type="time"
+                      className="bf-time-input"
+                      value={manualSleepStart}
+                      onChange={(e) => setManualSleepStart(e.target.value)}
+                    />
+                  </div>
+                  <span className="bf-manual-arrow">→</span>
+                  <div className="bf-manual-field">
+                    <label>סיום</label>
+                    <input
+                      type="time"
+                      className="bf-time-input"
+                      value={manualSleepEnd}
+                      onChange={(e) => setManualSleepEnd(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <SaveButton
+                  status={getStatus('sleep')}
+                  onClick={wrappedSave(handleSaveManualSleep)}
+                  onRetry={() => handleRetry('sleep')}
+                  label="שמור שינה ידנית"
+                />
+              </div>
             )}
           </div>
         </div>

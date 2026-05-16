@@ -109,6 +109,15 @@ export default function SettingsModal({
                 onChange={(e) => handleSetting('pumpingIntervalMinutes', e.target.value)}
               />
             </div>
+            <div className="setting-row">
+              <span className="setting-label">ערה יותר מ- (דקות)</span>
+              <input
+                className="setting-input"
+                type="number"
+                value={settings.awakeAlertMinutes ?? 180}
+                onChange={(e) => handleSetting('awakeAlertMinutes', e.target.value)}
+              />
+            </div>
           </div>
 
           {/* Kids & Medications */}

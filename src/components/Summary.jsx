@@ -1,3 +1,12 @@
+import {
+  getActiveSleep,
+  getLastCompletedSleep,
+  sleepInWindow,
+  awakeSinceMs,
+  sleepDurationMs,
+  formatDurationLongHM,
+} from '../utils/sleep';
+
 function formatTime(isoString) {
   if (!isoString) return '--:--';
   const d = new Date(isoString);
@@ -52,7 +61,7 @@ function isToday(isoString, now) {
     d.getDate() === ref.getDate();
 }
 
-export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, medications = [], medicationLogs = [], onLogMedication, settings, loading, now, firstSyncDone = true }) {
+export default function Summary({ feedingEntries, diaperEntries, pumpingEntries, sleepEntries = [], medications = [], medicationLogs = [], onLogMedication, settings, loading, now, firstSyncDone = true }) {
   if (loading) {
     return (
       <div className="loading-screen">
@@ -96,8 +105,69 @@ export default function Summary({ feedingEntries, diaperEntries, pumpingEntries,
   const anyMedMissing = showWarnings && medications.length > 0 &&
     medications.some(m => getMedTakenToday(m.name) < m.timesPerDay);
 
+  // `now` always comes from useNow in App.jsx (a number). Defensive fallback
+  // is 0 (renders as stale data for one tick) to keep this function pure.
+  const nowMs = typeof now === 'number' ? now : (now instanceof Date ? now.getTime() : 0);
+  const activeSleep = getActiveSleep(sleepEntries);
+  const lastSleep = getLastCompletedSleep(sleepEntries);
+  const sleepLast24h = sleepInWindow(sleepEntries, nowMs, 24 * 60 * 60_000);
+  const awakeMs = activeSleep ? null : awakeSinceMs(sleepEntries, nowMs);
+  const awakeAlertMs = (settings.awakeAlertMinutes ?? 0) * 60_000;
+  const awakeOverdue = showWarnings && awakeMs !== null && awakeAlertMs > 0 && awakeMs >= awakeAlertMs;
+  const sleepCardOverdue = showWarnings && awakeOverdue;
+
   return (
     <div className="summary">
+      {/* Sleep card — also shown when there's no data yet, so the section is discoverable */}
+      <div className={`summary-card sleep-summary-card ${sleepCardOverdue ? 'overdue' : ''} ${activeSleep ? 'sleeping' : ''}`}>
+        <div className="summary-card-icon">{activeSleep ? '💤' : '😴'}</div>
+        <div className="summary-card-content">
+          <h3 className="summary-card-title">שינה</h3>
+          {activeSleep ? (
+            <div className="summary-row">
+              <span className="summary-row-icon">💤</span>
+              <div className="summary-row-text">
+                <span className="summary-row-label">ישנה עכשיו · החל מ-</span>
+                <span className="summary-row-time">{formatTime(activeSleep.startTime)}</span>
+              </div>
+              <span className="summary-row-ago">{formatDurationLongHM(sleepDurationMs(activeSleep, nowMs))}</span>
+            </div>
+          ) : (
+            <div className="summary-row">
+              <span className="summary-row-icon">{awakeOverdue ? '🟠' : '👶'}</span>
+              <div className="summary-row-text">
+                <span className={`summary-row-label ${awakeOverdue ? 'warning' : ''}`}>ערה</span>
+                {lastSleep && (
+                  <span className="summary-row-time">מאז {formatTime(lastSleep.endTime)}</span>
+                )}
+              </div>
+              {awakeMs !== null && (
+                <span className={`summary-row-ago ${awakeOverdue ? 'warning' : ''}`}>{formatDurationLongHM(awakeMs)}</span>
+              )}
+            </div>
+          )}
+          {lastSleep && (
+            <div className="summary-row">
+              <span className="summary-row-icon">🕐</span>
+              <div className="summary-row-text">
+                <span className="summary-row-label">נמנום אחרון</span>
+                <span className="summary-row-time bf-time-range">
+                  {formatTime(lastSleep.startTime)} → {formatTime(lastSleep.endTime)}
+                </span>
+              </div>
+              <span className="summary-row-ago">{formatDurationLongHM(sleepDurationMs(lastSleep, nowMs))}</span>
+            </div>
+          )}
+          <div className="summary-row">
+            <span className="summary-row-icon">📊</span>
+            <div className="summary-row-text">
+              <span className="summary-row-label">סה״כ ב-24 שעות</span>
+            </div>
+            <span className="summary-row-ago">{formatDurationLongHM(sleepLast24h)}</span>
+          </div>
+        </div>
+      </div>
+
       {/* Feeding card */}
       <div className={`summary-card ${lastFeeding?.type !== 'breastfeeding' && feedingOverdue ? 'overdue' : ''}`}>
         <div className="summary-card-icon">{lastFeeding?.type === 'breastfeeding' ? '🤱' : '🍼'}</div>

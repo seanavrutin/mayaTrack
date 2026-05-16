@@ -68,14 +68,22 @@ export function subscribeToFamily(familyId, callbacks) {
   const unsubs = [];
   const notifyStatus = (source, status, err) => callbacks.onStatus?.(source, status, err);
 
-  const cols = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs'];
+  const cols = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs', 'sleeps'];
   cols.forEach((col) => {
     const ref = collection(db, 'families', familyId, col);
+    // All entry collections (including sleeps) store the primary timestamp
+    // in `time` (for sleeps this equals startTime), so a single orderBy works.
     const q = query(ref, orderBy('time', 'desc'));
     const unsub = onSnapshot(
       q,
+      // We process cache-served snapshots too. With persistent IndexedDB
+      // cache enabled, the FIRST emission is virtually always fromCache, and
+      // skipping it would leave the source stuck in 'syncing' until the 8s
+      // timeout flipped it to 'error' (showing a spurious "אין חיבור"
+      // banner) even when the cached data is perfectly usable. Firestore
+      // will fire the listener again automatically when the server confirms
+      // the data, so treating cache as "ok" is safe and accurate.
       (snap) => {
-        if (snap.metadata.fromCache) return;
         const entries = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         callbacks[col]?.(entries);
         notifyStatus(col, 'ok');
@@ -91,7 +99,6 @@ export function subscribeToFamily(familyId, callbacks) {
   const kidsUnsub = onSnapshot(
     collection(db, 'families', familyId, 'kids'),
     (snap) => {
-      if (snap.metadata.fromCache) return;
       const kids = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       callbacks.kids?.(kids);
       notifyStatus('kids', 'ok');
@@ -106,7 +113,6 @@ export function subscribeToFamily(familyId, callbacks) {
   const settingsUnsub = onSnapshot(
     doc(db, 'families', familyId, 'settings', 'general'),
     (snap) => {
-      if (snap.metadata.fromCache) return;
       callbacks.settings?.(snap.exists() ? snap.data() : {});
       notifyStatus('settings', 'ok');
     },

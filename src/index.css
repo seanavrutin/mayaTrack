@@ -189,7 +189,7 @@ input {
 
 .tile-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -1700,6 +1700,298 @@ input {
 
 .sync-banner-retry:hover {
   background: rgba(0, 0, 0, 0.14);
+}
+
+/* ── Sleep pill (always visible at top of form tab) ── */
+
+.sleep-pill {
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow);
+  transition: background 0.3s, color 0.3s;
+}
+
+.sleep-pill-awake {
+  background: var(--card-bg);
+  color: var(--text);
+  justify-content: space-between;
+}
+
+.sleep-pill-awake-long {
+  background: #fff4e0;
+  color: #b25e09;
+}
+
+.sleep-pill-awake-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.sleep-pill-sleep-btn {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sleep-pill-sleep-btn:hover:not(:disabled) {
+  background: #ddd0ee;
+}
+
+.sleep-pill-sleep-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sleep-pill-asleep {
+  background: linear-gradient(135deg, #ede4fb 0%, #d8c9f3 100%);
+  color: var(--primary-dark);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.sleep-pill-asleep-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sleep-pill-asleep-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sleep-pill-asleep-sub {
+  font-size: 0.78rem;
+  color: var(--primary-dark);
+  opacity: 0.7;
+  margin-right: 28px;
+}
+
+.sleep-pill-wake-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(124, 92, 191, 0.25);
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+
+.sleep-pill-wake-btn:hover:not(:disabled) {
+  background: #6a4dad;
+}
+
+.sleep-pill-wake-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.sleep-pill-wake-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sleep-pill-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.sleep-pill-icon-pulse {
+  animation: sleep-pulse 2.5s ease-in-out infinite;
+  display: inline-block;
+}
+
+@keyframes sleep-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(0.92); }
+}
+
+/* Sleep section inside the entry form (tile expanded) */
+
+.sleep-edit-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.sleep-edit-active,
+.sleep-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Edit button shown alongside delete in the sleeps table */
+.cell-action-pair {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.edit-btn {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s;
+}
+
+.edit-btn:hover {
+  background: #ddd0ee;
+}
+
+/* Sleep edit modal — stacks above the sleep history table modal */
+.sleep-edit-overlay {
+  z-index: 300;
+}
+
+.sleep-edit-modal {
+  z-index: 301;
+}
+
+.sleep-edit-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+.sleep-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sleep-edit-field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sleep-edit-input {
+  font-size: 1rem;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text);
+  font-family: inherit;
+}
+
+.sleep-edit-clear-end {
+  align-self: flex-start;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--text-muted);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.sleep-edit-clear-end:hover:not(:disabled) {
+  color: var(--secondary);
+  border-color: var(--secondary);
+}
+
+.sleep-edit-error {
+  background: #fdecea;
+  color: #b71c1c;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.sleep-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sleep-edit-save {
+  flex: 1;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sleep-edit-save:hover:not(:disabled) {
+  background: #6a4dad;
+}
+
+.sleep-edit-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sleep-edit-cancel {
+  flex: 0 0 auto;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.sleep-edit-cancel:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+/* Sleep summary card variant on Summary tab */
+
+.summary-card.sleeping {
+  border-right-color: var(--primary-dark);
+}
+
+.summary-card.sleeping .summary-card-icon {
+  background: linear-gradient(135deg, #ede4fb 0%, #d8c9f3 100%);
 }
 
 /* ── Failed writes banner (records that couldn't be saved) ── */
