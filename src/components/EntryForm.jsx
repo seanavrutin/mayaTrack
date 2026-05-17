@@ -367,7 +367,13 @@ export default function EntryForm({
     const entry = {
       id: generateId(),
       type: 'breastfeeding',
-      time: bfData.isTimer ? bfData.startTime : time.toISOString(),
+      // `time` is the canonical timestamp used for sorting, "next feeding"
+      // countdown, side-panel table, and daily graph bucketing. For
+      // breastfeeding it should always be the actual session start, never
+      // the moment the user tapped Save (which is what the time picker shows
+      // by default if the user didn't backdate it). Both timer and manual
+      // modes already build the correct startTime in bfData.
+      time: bfData.startTime,
       formula: 0,
       pumpedMilk: 0,
       breastfeedingMinutes: bfData.totalMinutes,
