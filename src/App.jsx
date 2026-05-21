@@ -540,7 +540,6 @@ function App() {
             feedingEntries={kidFeedingEntries}
             diaperEntries={kidDiaperEntries}
             pumpingEntries={pumpingEntries}
-            sleepEntries={kidSleepEntries}
             medications={activeKid?.medications || []}
             medicationLogs={kidMedicationLogs}
             onLogMedication={(medName) => handleAddEntry('medicationLogs', {
