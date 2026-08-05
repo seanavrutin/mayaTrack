@@ -4,6 +4,11 @@ import {
   awakeSinceMs,
   sleepDurationMs,
   formatDurationLongHM,
+  getSleepPeriod,
+  inferDefaultPeriod,
+  periodLabelHe,
+  SLEEP_PERIOD_DAY,
+  SLEEP_PERIOD_NIGHT,
 } from '../utils/sleep';
 
 function fmtTime(iso) {
@@ -16,6 +21,31 @@ function fmtTimeFromDate(d) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+export function PeriodToggle({ value, onChange, disabled }) {
+  return (
+    <div className="sleep-period-toggle" role="group" aria-label="יום או לילה">
+      <button
+        type="button"
+        className={`sleep-period-btn ${value === SLEEP_PERIOD_DAY ? 'selected' : ''}`}
+        onClick={() => onChange(SLEEP_PERIOD_DAY)}
+        disabled={disabled}
+        aria-pressed={value === SLEEP_PERIOD_DAY}
+      >
+        ☀️ יום
+      </button>
+      <button
+        type="button"
+        className={`sleep-period-btn ${value === SLEEP_PERIOD_NIGHT ? 'selected' : ''}`}
+        onClick={() => onChange(SLEEP_PERIOD_NIGHT)}
+        disabled={disabled}
+        aria-pressed={value === SLEEP_PERIOD_NIGHT}
+      >
+        🌙 לילה
+      </button>
+    </div>
+  );
+}
+
 export default function SleepPill({
   sleepEntries = [],
   now,
@@ -26,6 +56,7 @@ export default function SleepPill({
 }) {
   const [busy, setBusy] = useState(false);
   const nowMs = now instanceof Date ? now.getTime() : (typeof now === 'number' ? now : 0);
+  const [period, setPeriod] = useState(() => inferDefaultPeriod(nowMs || Date.now()));
 
   const active = getActiveSleep(sleepEntries);
   const awakeMs = active ? null : awakeSinceMs(sleepEntries, nowMs);
@@ -54,6 +85,7 @@ export default function SleepPill({
         time: startIso,
         startTime: startIso,
         endTime: null,
+        period,
       });
     } finally {
       setBusy(false);
@@ -70,6 +102,10 @@ export default function SleepPill({
       const activeStartMs = new Date(active.startTime).getTime();
       const endMs = effectiveDate.getTime() > activeStartMs ? effectiveDate.getTime() : nowMs;
       await onEndSleep(active.id, { endTime: new Date(endMs).toISOString() });
+      // After night ends, the next sleep is usually a day nap.
+      if (getSleepPeriod(active) === SLEEP_PERIOD_NIGHT) {
+        setPeriod(SLEEP_PERIOD_DAY);
+      }
     } finally {
       setBusy(false);
     }
@@ -78,6 +114,7 @@ export default function SleepPill({
   if (active) {
     const activeStartMs = new Date(active.startTime).getTime();
     const pickerInvalidForEnd = usingPickerTime && effectiveDate.getTime() <= activeStartMs;
+    const activePeriod = getSleepPeriod(active);
     const wakeLabel = busy
       ? 'שומר...'
       : usingPickerTime && !pickerInvalidForEnd
@@ -89,6 +126,9 @@ export default function SleepPill({
           <div className="sleep-pill-asleep-text">
             <span className="sleep-pill-icon sleep-pill-icon-pulse">💤</span>
             <span>ישנה · {formatDurationLongHM(asleepMs)}</span>
+            <span className={`sleep-period-badge sleep-period-badge--${activePeriod}`}>
+              {periodLabelHe(activePeriod)}
+            </span>
           </div>
           <button
             type="button"
@@ -123,14 +163,17 @@ export default function SleepPill({
         <span className="sleep-pill-icon">👶</span>
         <span>{awakeLabel}</span>
       </div>
-      <button
-        type="button"
-        className="sleep-pill-sleep-btn"
-        onClick={handleStart}
-        disabled={busy}
-      >
-        {sleepBtnLabel}
-      </button>
+      <div className="sleep-pill-awake-actions">
+        <PeriodToggle value={period} onChange={setPeriod} disabled={busy} />
+        <button
+          type="button"
+          className="sleep-pill-sleep-btn"
+          onClick={handleStart}
+          disabled={busy}
+        >
+          {sleepBtnLabel}
+        </button>
+      </div>
     </div>
   );
 }

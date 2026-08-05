@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import NumberStepper from './NumberStepper';
 import TimeInput from './TimeInput';
-import SleepPill from './SleepPill';
-import { getActiveSleep } from '../utils/sleep';
+import SleepPill, { PeriodToggle } from './SleepPill';
+import { getActiveSleep, getSleepPeriod, inferDefaultPeriod, SLEEP_PERIOD_DAY } from '../utils/sleep';
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -478,8 +478,10 @@ export default function EntryForm({
   const activeSleep = getActiveSleep(sleepEntries);
   const [manualSleepStart, setManualSleepStart] = useState('');
   const [manualSleepEnd, setManualSleepEnd] = useState('');
+  const [manualSleepPeriod, setManualSleepPeriod] = useState(() => inferDefaultPeriod(Date.now()));
   const [editSleepStart, setEditSleepStart] = useState('');
   const [editSleepEnd, setEditSleepEnd] = useState('');
+  const [editSleepPeriod, setEditSleepPeriod] = useState(SLEEP_PERIOD_DAY);
 
   const buildSleepDateTime = (timeStr, baseDateIso) => {
     if (!timeStr) return null;
@@ -514,6 +516,7 @@ export default function EntryForm({
       time: startDate.toISOString(),
       startTime: startDate.toISOString(),
       endTime: endDate.toISOString(),
+      period: manualSleepPeriod,
     };
     return doSave('sleep', onAddSleep, entry, () => {
       setManualSleepStart('');
@@ -523,7 +526,7 @@ export default function EntryForm({
 
   const handleSaveSleepEdit = () => {
     if (!activeSleep) return Promise.resolve(false);
-    const update = {};
+    const update = { period: editSleepPeriod };
     if (editSleepStart) {
       const newStart = buildSleepDateTime(editSleepStart, activeSleep.startTime);
       if (newStart) {
@@ -535,7 +538,6 @@ export default function EntryForm({
       const newEnd = buildSleepDateTime(editSleepEnd, activeSleep.startTime);
       if (newEnd) update.endTime = newEnd;
     }
-    if (Object.keys(update).length === 0) return Promise.resolve(false);
     return doSave('sleep-edit', () => onUpdateSleep(activeSleep.id, update), null, () => {
       setEditSleepStart('');
       setEditSleepEnd('');
@@ -567,6 +569,10 @@ export default function EntryForm({
     setSupplementMode(false);
     if (key === 'breastfeeding' && !activeBreast && lastBreastSide) {
       setActiveBreast(lastBreastSide === 'right' ? 'left' : 'right');
+    }
+    if (key === 'sleep') {
+      if (activeSleep) setEditSleepPeriod(getSleepPeriod(activeSleep));
+      else setManualSleepPeriod(inferDefaultPeriod(Date.now()));
     }
     setOpenSection(key);
   };
@@ -932,6 +938,7 @@ export default function EntryForm({
                   כרגע מסומנת כישנה (התחילה ב-{new Date(activeSleep.startTime).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}).
                   אפשר לתקן את שעת ההתחלה, או לסיים בשעה אחרת מ"עכשיו".
                 </p>
+                <PeriodToggle value={editSleepPeriod} onChange={setEditSleepPeriod} />
                 <div className="bf-manual-times">
                   <div className="bf-manual-field">
                     <label>התחלה חדשה</label>
@@ -966,6 +973,7 @@ export default function EntryForm({
                   להוספת שינה שלא נרשמה בזמן אמת — מלאו שעת התחלה וסיום.
                   אם הסיום לפני ההתחלה, ההתחלה תיחשב אתמול.
                 </p>
+                <PeriodToggle value={manualSleepPeriod} onChange={setManualSleepPeriod} />
                 <div className="bf-manual-times">
                   <div className="bf-manual-field">
                     <label>התחלה</label>

@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { logOut } from '../services/firebase';
 import GraphView from './GraphModal';
-import { formatDurationHM } from '../utils/sleep';
+import { formatDurationHM, getSleepPeriod, periodLabelHe, SLEEP_PERIOD_DAY } from '../utils/sleep';
+import { PeriodToggle } from './SleepPill';
 
 function fmt(isoString) {
   if (!isoString) return '';
@@ -158,6 +159,7 @@ function SleepTable({ entries, onDelete, onEdit }) {
       <thead>
         <tr>
           <th>תאריך</th>
+          <th>סוג</th>
           <th>התחלה</th>
           <th>סיום</th>
           <th>משך</th>
@@ -167,12 +169,18 @@ function SleepTable({ entries, onDelete, onEdit }) {
       <tbody>
         {entries.map((e) => {
           const isOpen = !e.endTime;
+          const period = getSleepPeriod(e);
           const durationMs = isOpen
             ? 0
             : new Date(e.endTime).getTime() - new Date(e.startTime).getTime();
           return (
             <tr key={e.id}>
               <td className="cell-date">{fmtDate(e.startTime)}</td>
+              <td>
+                <span className={`sleep-period-badge sleep-period-badge--${period}`}>
+                  {period === SLEEP_PERIOD_DAY ? '☀️' : '🌙'} {periodLabelHe(period)}
+                </span>
+              </td>
               <td className="cell-time">{fmt(e.startTime)}</td>
               <td className="cell-time">
                 {isOpen ? <span className="badge badge-side">פעיל</span> : fmt(e.endTime)}
@@ -413,6 +421,7 @@ export default function SidePanel({
   const [editingSleep, setEditingSleep] = useState(null);
   const [editSleepStart, setEditSleepStart] = useState('');
   const [editSleepEnd, setEditSleepEnd] = useState('');
+  const [editSleepPeriod, setEditSleepPeriod] = useState(SLEEP_PERIOD_DAY);
   const [editSleepBusy, setEditSleepBusy] = useState(false);
   const [editSleepError, setEditSleepError] = useState(null);
 
@@ -420,6 +429,7 @@ export default function SidePanel({
     setEditingSleep(entry);
     setEditSleepStart(toLocalDateTimeInput(entry.startTime));
     setEditSleepEnd(toLocalDateTimeInput(entry.endTime));
+    setEditSleepPeriod(getSleepPeriod(entry));
     setEditSleepError(null);
   };
 
@@ -428,6 +438,7 @@ export default function SidePanel({
     setEditingSleep(null);
     setEditSleepStart('');
     setEditSleepEnd('');
+    setEditSleepPeriod(SLEEP_PERIOD_DAY);
     setEditSleepError(null);
   };
 
@@ -456,10 +467,12 @@ export default function SidePanel({
         time: startIso,
         startTime: startIso,
         endTime: endIso,
+        period: editSleepPeriod,
       });
       setEditingSleep(null);
       setEditSleepStart('');
       setEditSleepEnd('');
+      setEditSleepPeriod(SLEEP_PERIOD_DAY);
     } catch (err) {
       console.warn('sleep edit failed', err);
       setEditSleepError('השמירה נכשלה — נסי שוב');
@@ -537,6 +550,14 @@ export default function SidePanel({
               <button className="close-btn" onClick={closeSleepEditor} disabled={editSleepBusy}>✕</button>
             </div>
             <div className="modal-body">
+              <div className="sleep-edit-field">
+                <label>סוג</label>
+                <PeriodToggle
+                  value={editSleepPeriod}
+                  onChange={setEditSleepPeriod}
+                  disabled={editSleepBusy}
+                />
+              </div>
               <div className="sleep-edit-field">
                 <label>התחלה</label>
                 <input

@@ -1,5 +1,10 @@
 import { useRef, useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import {
+  computeSleepDayWindows,
+  computeSleepDayRow,
+  SLEEP_PERIOD_DAY,
+} from '../utils/sleep';
 
 const BAR_SPACE = 55;
 const CHART_HEIGHT = 260;
@@ -146,60 +151,15 @@ function computePumpingData(pumpingEntries) {
   }));
 }
 
-// Builds an actogram dataset: one row per calendar day for a sliding window
-// of `days` days ending `endOffsetDays` days before today (0 = window ends
-// today). Each row carries the sleep segments that fall inside that day's
-// [00:00, 24:00] window, with positions expressed as fractions of the day so
-// a renderer can lay them out on a 24-hour strip. Sessions that cross
-// midnight appear in both days' rows. Open sessions (no endTime) are treated
-// as ending at `nowMs` and flagged so the renderer can style them.
-function computeActogramData(sleepEntries, days, nowMs, endOffsetDays = 0) {
-  const todayStart = new Date(nowMs);
-  todayStart.setHours(0, 0, 0, 0);
-  const windowEndAnchor = new Date(todayStart);
-  windowEndAnchor.setDate(windowEndAnchor.getDate() - endOffsetDays);
-
-  const rows = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const dayStart = new Date(windowEndAnchor);
-    dayStart.setDate(windowEndAnchor.getDate() - i);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
-
-    const segments = [];
-    let totalMinutes = 0;
-
-    for (const e of sleepEntries) {
-      if (!e?.startTime) continue;
-      const s = new Date(e.startTime);
-      const en = e.endTime ? new Date(e.endTime) : new Date(nowMs);
-      if (en <= s) continue;
-
-      const segStartMs = Math.max(s.getTime(), dayStart.getTime());
-      const segEndMs = Math.min(en.getTime(), dayEnd.getTime());
-      if (segEndMs <= segStartMs) continue;
-
-      const startFrac = (segStartMs - dayStart.getTime()) / 86_400_000;
-      const endFrac = (segEndMs - dayStart.getTime()) / 86_400_000;
-      const minutes = Math.round((segEndMs - segStartMs) / 60_000);
-      totalMinutes += minutes;
-      segments.push({
-        startFrac,
-        endFrac,
-        startMs: segStartMs,
-        endMs: segEndMs,
-        minutes,
-        // Mark the live tail of an open session so the renderer can pulse it.
-        isOpen: !e.endTime && segEndMs === Math.min(en.getTime(), dayEnd.getTime()) && en.getTime() <= dayEnd.getTime(),
-      });
-    }
-
-    segments.sort((a, b) => a.startFrac - b.startFrac);
-    rows.push({ dayStart, segments, totalMinutes });
-  }
-
-  // Newest day on top.
-  return rows.reverse();
+// Builds one actogram row for a sleep-day window (wake → next wake). Kept as a
+// thin wrapper so GraphView can stay readable; the window math lives in sleep.js.
+function computeActogramData(sleepEntries, nowMs, offsetDays = 0) {
+  const windows = computeSleepDayWindows(sleepEntries, nowMs);
+  if (!windows.length) return [];
+  const idx = Math.min(offsetDays, windows.length - 1);
+  const window = windows[idx];
+  if (!window) return [];
+  return [computeSleepDayRow(sleepEntries, window, nowMs)];
 }
 
 function formatDurationHM(minutes) {
@@ -218,22 +178,19 @@ const WEEKDAYS_HE = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 // duration label inside, even short naps; the chart vertical-scrolls.
 const SLEEP_HEADER_H = 16;
 const SLEEP_HOUR_H = 50;
-const SLEEP_HOURS_H = 24 * SLEEP_HOUR_H;
 
 function SleepActogramChart({ row, nowMs }) {
-  // Single-day vertical view. Hours run top→bottom along the left axis,
-  // a wide central column holds the sleep bands, and each band carries the
-  // duration written inside it. The axis intentionally shows ONLY the
-  // start/end times of actual sleep sessions — no generic clock labels —
-  // so it reads as a sleep log, not a 24h ruler. Faint dotted gridlines
-  // every 3 hours stay in the background for visual orientation.
+  // Single sleep-day vertical view. The strip spans wake→next-wake (day + its
+  // night), not a fixed calendar 24h. Hours run top→bottom; day naps and night
+  // sleep use different band colors.
   const TIME_AXIS_W = 56;
   const DAY_W = 268;
   const VIEW_W = TIME_AXIS_W + DAY_W + 18;
 
   const HEADER_H = SLEEP_HEADER_H;
   const HOUR_H = SLEEP_HOUR_H;
-  const HOURS_H = SLEEP_HOURS_H;
+  const hoursSpan = Math.max(row.durationMs / 3_600_000, 1);
+  const HOURS_H = hoursSpan * HOUR_H;
   const FOOTER_H = 16;
   const VIEW_H = HEADER_H + HOURS_H + FOOTER_H;
 
@@ -242,13 +199,10 @@ function SleepActogramChart({ row, nowMs }) {
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
-  const todayStart = new Date(nowMs);
-  todayStart.setHours(0, 0, 0, 0);
-  const isToday = row.dayStart.getTime() === todayStart.getTime();
+  const isCurrent = Boolean(row.isCurrent);
 
   // Build axis transitions from actual session edges. Edges that land
-  // exactly at the day boundary (00:00 / 24:00) come from cross-midnight
-  // clipping, not real transitions, so suppress them.
+  // exactly at the window boundary come from clipping, not real transitions.
   const transitions = [];
   for (const seg of row.segments) {
     if (seg.startFrac > 0.0001) {
@@ -273,6 +227,22 @@ function SleepActogramChart({ row, nowMs }) {
     prevY = y;
   }
 
+  // Faint gridlines every ~3 wall-clock hours within the window.
+  const gridFracs = [];
+  {
+    const cursor = new Date(row.startMs);
+    cursor.setMinutes(0, 0, 0);
+    cursor.setHours(cursor.getHours() + 1);
+    while (cursor.getTime() < row.endMs) {
+      const h = cursor.getHours();
+      if (h % 3 === 0) {
+        const frac = (cursor.getTime() - row.startMs) / row.durationMs;
+        if (frac > 0.01 && frac < 0.99) gridFracs.push(frac);
+      }
+      cursor.setHours(cursor.getHours() + 1);
+    }
+  }
+
   return (
     <svg
       className="sleep-actogram"
@@ -280,21 +250,24 @@ function SleepActogramChart({ row, nowMs }) {
       height={VIEW_H}
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       role="img"
-      aria-label="גרף שינה — יום בודד"
+      aria-label="גרף שינה — יום ולילה"
     >
       <defs>
-        <linearGradient id="grad-sleep-v" x1="0" y1="0" x2="1" y2="0">
+        <linearGradient id="grad-sleep-night-v" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#9575cd" stopOpacity={0.95} />
           <stop offset="100%" stopColor="#7e57c2" stopOpacity={0.95} />
         </linearGradient>
+        <linearGradient id="grad-sleep-day-v" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#64b5f6" stopOpacity={0.92} />
+          <stop offset="100%" stopColor="#42a5f5" stopOpacity={0.92} />
+        </linearGradient>
       </defs>
 
-      {/* Faint hour gridlines (no labels) every 3 hours for orientation */}
-      {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => {
-        const y = HEADER_H + h * HOUR_H;
+      {gridFracs.map((frac, i) => {
+        const y = HEADER_H + frac * HOURS_H;
         return (
           <line
-            key={h}
+            key={`g-${i}`}
             x1={TIME_AXIS_W}
             y1={y}
             x2={TIME_AXIS_W + DAY_W}
@@ -311,7 +284,7 @@ function SleepActogramChart({ row, nowMs }) {
         width={DAY_W}
         height={HOURS_H}
         rx="8"
-        className={`sleep-actogram-track ${isToday ? 'today' : ''}`}
+        className={`sleep-actogram-track ${isCurrent ? 'today' : ''}`}
       />
 
       {/* Empty-day message */}
@@ -330,17 +303,13 @@ function SleepActogramChart({ row, nowMs }) {
       {row.segments.map((seg, j) => {
         const segY = HEADER_H + seg.startFrac * HOURS_H;
         const segH = Math.max((seg.endFrac - seg.startFrac) * HOURS_H, 4);
-        // Use a smaller font for short bands so the label still fits inside
-        // (avoids clipping by the scroll container if we put it outside).
         const fitsLarge = segH >= 24;
         const fitsSmall = segH >= 14;
-        // Only animate ZZZs on bands tall enough that the float distance
-        // stays comfortably inside; tiny naps just get the duration label.
         const showZzz = segH >= 50;
-        // Three CSS delay classes give bands different rhythms so the
-        // animations don't all pulse in sync across the chart.
         const delayClass = ['zzz-d1', 'zzz-d2', 'zzz-d3'][j % 3];
         const delayClass2 = ['zzz-d1', 'zzz-d2', 'zzz-d3'][(j + 2) % 3];
+        const isDayNap = seg.period === SLEEP_PERIOD_DAY;
+        const fill = isDayNap ? 'url(#grad-sleep-day-v)' : 'url(#grad-sleep-night-v)';
         return (
           <g key={`seg-${j}`}>
             <rect
@@ -349,15 +318,14 @@ function SleepActogramChart({ row, nowMs }) {
               width={DAY_W - 8}
               height={segH}
               rx="6"
-              fill="url(#grad-sleep-v)"
+              fill={fill}
               className={seg.isOpen ? 'sleep-actogram-seg open' : 'sleep-actogram-seg'}
             >
               <title>
-                {`${fmtTime(seg.startMs)} → ${fmtTime(seg.endMs)} · ${formatDurationHM(seg.minutes)}`}
+                {`${isDayNap ? 'יום' : 'לילה'} · ${fmtTime(seg.startMs)} → ${fmtTime(seg.endMs)} · ${formatDurationHM(seg.minutes)}`}
               </title>
             </rect>
 
-            {/* Floating ZZZ — purely decorative; signals "this is sleep" */}
             {showZzz && (
               <g pointerEvents="none">
                 <text
@@ -403,14 +371,7 @@ function SleepActogramChart({ row, nowMs }) {
         );
       })}
 
-      {/* Awake-duration labels — every gap between consecutive sleep bands
-          gets labelled, even short wakings (e.g. a 13-min stir). Layout
-          adapts to the gap height:
-          - large gap (≥ 28 px)  → centered italic label, regular size
-          - medium gap (16–28)   → centered italic label, compact size
-          - tiny gap (< 16 px)   → label sits in a small backdrop pill so
-                                   it stays legible while overlapping the
-                                   adjacent band edges. */}
+      {/* Awake-duration labels between consecutive sleep bands */}
       {row.segments.slice(0, -1).map((prev, i) => {
         const next = row.segments[i + 1];
         const gapH = (next.startFrac - prev.endFrac) * HOURS_H;
@@ -487,9 +448,10 @@ function SleepActogramChart({ row, nowMs }) {
         </g>
       ))}
 
-      {/* "Now" indicator on today */}
-      {isToday && (() => {
-        const nowFrac = (nowMs - todayStart.getTime()) / 86_400_000;
+      {/* "Now" indicator on the current sleep-day */}
+      {isCurrent && (() => {
+        const nowFrac = (nowMs - row.startMs) / row.durationMs;
+        if (nowFrac < 0 || nowFrac > 1) return null;
         const ny = HEADER_H + nowFrac * HOURS_H;
         return (
           <g>
@@ -536,7 +498,7 @@ export default function GraphView({
   // `title` is still returned by the memo for parity with other consumers
   // (and to keep this file self-documenting), but the parent modal renders
   // the header now, so we don't pull it out here.
-  const { data, summary, actogramNowMs, actogramDayLabel, actogramDayTotal } = useMemo(() => {
+  const { data, summary, actogramNowMs, actogramDayLabel, actogramDayTotal, actogramWindowCount } = useMemo(() => {
     switch (type) {
       case 'pee': {
         const d = computePeeData(diaperEntries);
@@ -617,19 +579,20 @@ export default function GraphView({
       }
       case 'sleep': {
         if (!sleepEntries.length) {
-          return { data: [], title: '😴 גרף שינה', summary: '' };
+          return { data: [], title: '😴 גרף שינה', summary: '', actogramWindowCount: 0 };
         }
-        // Always exactly one day. `computeActogramData` returns an array of
-        // 1 row pre-clipped to that day's window, with cross-midnight
-        // sessions already split correctly.
-        const rows = computeActogramData(sleepEntries, 1, nowMs, actogramOffsetDays);
+        // One sleep-day at a time: wake → next wake (daytime + its night).
+        const windows = computeSleepDayWindows(sleepEntries, nowMs);
+        const rows = computeActogramData(sleepEntries, nowMs, actogramOffsetDays);
         const day = rows[0];
+        if (!day) {
+          return { data: [], title: '😴 גרף שינה', summary: '', actogramWindowCount: windows.length };
+        }
 
         const fmtDate = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const dayLabel = `יום ${WEEKDAYS_HE[day.dayStart.getDay()]}׳ ${fmtDate(day.dayStart)}`;
+        const labelDate = day.labelDate instanceof Date ? day.labelDate : new Date(day.startMs);
+        const dayLabel = `יום ${WEEKDAYS_HE[labelDate.getDay()]}׳ ${fmtDate(labelDate)}`;
 
-        // Summary now reflects the selected day, since that's what's on
-        // screen. Multi-day averages aren't useful when only one day shows.
         const numSessions = day.segments.length;
         const longestMin = numSessions > 0
           ? Math.max(...day.segments.map((s) => s.minutes))
@@ -638,11 +601,11 @@ export default function GraphView({
         if (numSessions === 0) {
           summary = 'אין נתוני שינה ביום זה';
         } else {
-          const sessionsLabel = numSessions === 1 ? 'נמנום' : 'נמנומים';
           const parts = [
             `סה״כ ${formatDurationHM(day.totalMinutes)}`,
-            `${numSessions} ${sessionsLabel}`,
           ];
+          if (day.dayMinutes > 0) parts.push(`יום ${formatDurationHM(day.dayMinutes)}`);
+          if (day.nightMinutes > 0) parts.push(`לילה ${formatDurationHM(day.nightMinutes)}`);
           if (numSessions > 1) {
             parts.push(`הארוך ${formatDurationHM(longestMin)}`);
           }
@@ -655,10 +618,8 @@ export default function GraphView({
           summary,
           actogramNowMs: nowMs,
           actogramDayLabel: dayLabel,
-          // Total sleep for the displayed day (00:00–24:00, midnight-clipped).
-          // null when nothing was logged that day — the renderer then hides
-          // the chip so an empty value never appears.
           actogramDayTotal: numSessions > 0 ? formatDurationHM(day.totalMinutes) : null,
+          actogramWindowCount: windows.length,
         };
       }
       default:
@@ -670,13 +631,15 @@ export default function GraphView({
     const el = scrollRef.current;
     if (!el) return;
     requestAnimationFrame(() => {
-      if (type === 'sleep') {
-        // Scroll vertically so the current hour-of-day lands roughly in
-        // the middle of the visible area — works the same for any day
-        // since the y axis is hour-of-day, not calendar date.
-        const todayMs0 = new Date(nowMs).setHours(0, 0, 0, 0);
-        const nowFrac = (nowMs - todayMs0) / 86_400_000;
-        const target = SLEEP_HEADER_H + nowFrac * SLEEP_HOURS_H - el.clientHeight / 2;
+      if (type === 'sleep' && data[0]) {
+        // Scroll so "now" (current sleep-day) or the middle of the strip is visible.
+        const row = data[0];
+        const hoursSpan = Math.max(row.durationMs / 3_600_000, 1);
+        const hoursH = hoursSpan * SLEEP_HOUR_H;
+        const nowFrac = row.isCurrent
+          ? Math.min(1, Math.max(0, (nowMs - row.startMs) / row.durationMs))
+          : 0.35;
+        const target = SLEEP_HEADER_H + nowFrac * hoursH - el.clientHeight / 2;
         el.scrollTop = Math.max(0, target);
       } else {
         el.scrollLeft = el.scrollWidth;
@@ -800,7 +763,8 @@ export default function GraphView({
           <button
             type="button"
             className="actogram-nav-btn"
-            onClick={() => setActogramOffsetDays((o) => o + 1)}
+            onClick={() => setActogramOffsetDays((o) => Math.min(o + 1, Math.max(0, (actogramWindowCount || 1) - 1)))}
+            disabled={actogramOffsetDays >= Math.max(0, (actogramWindowCount || 1) - 1)}
             aria-label="יום קודם"
           >
             ‹
