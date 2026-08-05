@@ -1837,40 +1837,81 @@ input {
   background: rgba(0, 0, 0, 0.14);
 }
 
-.sleep-pill-awake-actions {
+.sleep-pill-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
 
+/* Sliding pill switch. Forced to LTR so the knob's travel direction is
+ * deterministic inside the RTL layout: ☀️ sits left, 🌙 right. */
 .sleep-period-toggle {
+  position: relative;
+  direction: ltr;
   display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 999px;
-  background: rgba(124, 92, 191, 0.12);
-}
-
-.sleep-period-btn {
-  border: none;
-  background: transparent;
-  color: var(--primary-dark);
-  font-weight: 600;
-  font-size: 0.72rem;
-  padding: 5px 8px;
+  align-items: center;
+  width: 68px;
+  height: 34px;
+  padding: 3px;
+  border: 1px solid rgba(124, 92, 191, 0.28);
   border-radius: 999px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s;
 }
 
-.sleep-period-btn.selected {
-  background: var(--primary);
-  color: #fff;
+.sleep-period-toggle--day {
+  background: #d7ecfd;
+  border-color: #90caf9;
 }
 
-.sleep-period-btn:disabled {
+.sleep-period-toggle--night {
+  background: #ded5f5;
+  border-color: #b39ddb;
+}
+
+.sleep-period-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 30px;
+  height: 26px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.18s ease;
+}
+
+.sleep-period-toggle--night .sleep-period-knob {
+  transform: translateX(32px);
+}
+
+.sleep-period-opt {
+  position: relative;
+  z-index: 1;
+  width: 30px;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 26px;
+  opacity: 0.4;
+  transition: opacity 0.18s;
+}
+
+.sleep-period-toggle--day .sleep-period-opt-day,
+.sleep-period-toggle--night .sleep-period-opt-night {
+  opacity: 1;
+}
+
+.sleep-period-toggle:active:not(:disabled) .sleep-period-knob {
+  transform: scale(0.94) translateX(0);
+}
+
+.sleep-period-toggle--night:active:not(:disabled) .sleep-period-knob {
+  transform: scale(0.94) translateX(32px);
+}
+
+.sleep-period-toggle:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -1897,23 +1938,23 @@ input {
   color: #5e35b1;
 }
 
-.section-fields .sleep-period-toggle,
-.sleep-edit-field .sleep-period-toggle,
-.sleep-manual .sleep-period-toggle,
-.sleep-edit-active .sleep-period-toggle {
-  display: flex;
-  width: 100%;
-  margin-bottom: 12px;
-  border-radius: var(--radius);
-  padding: 4px;
+.sleep-period-badge--unmarked {
+  background: #eceaf0;
+  color: #7c7589;
 }
 
-.section-fields .sleep-period-btn,
-.sleep-edit-field .sleep-period-btn {
-  flex: 1;
-  font-size: 0.9rem;
-  padding: 10px 12px;
-  border-radius: calc(var(--radius) - 2px);
+.sleep-period-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sleep-period-row-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
 }
 
 /* ── Sleep pill (always visible at top of form tab) ── */
@@ -2509,6 +2550,15 @@ input {
   direction: ltr;
 }
 
+.actogram-nav-span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+  opacity: 0.6;
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
 .actogram-nav-total {
   display: inline-flex;
   align-items: baseline;
@@ -2614,6 +2664,25 @@ input {
 
 .sleep-day-time.end {
   fill: #8b7a9e;
+}
+
+.sleep-day-time.wake {
+  fill: #ef8f00;
+  font-weight: 800;
+}
+
+.sleep-actogram-wake-line {
+  stroke: #ffb300;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.sleep-day-wake-label {
+  font-size: 10px;
+  fill: #ef8f00;
+  font-weight: 700;
+  direction: rtl;
+  unicode-bidi: plaintext;
 }
 
 .sleep-day-tick {

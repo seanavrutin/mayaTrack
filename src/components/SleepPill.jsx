@@ -21,28 +21,30 @@ function fmtTimeFromDate(d) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export function PeriodToggle({ value, onChange, disabled }) {
+// Sliding pill switch between day (☀️) and night (🌙). Icon-only, and the knob
+// makes it read as switchable. Selecting never saves on its own — it only sets
+// what the next נרדמה / התעוררה press will record.
+export function PeriodToggle({ value, onChange, disabled, mode = 'sleep' }) {
+  const isDay = value === SLEEP_PERIOD_DAY;
+  const next = isDay ? SLEEP_PERIOD_NIGHT : SLEEP_PERIOD_DAY;
+  const label = mode === 'active'
+    ? (isDay ? 'זה נמנום יום' : 'זו שינת הלילה')
+    : (isDay ? 'נמנום יום' : 'שינת לילה');
   return (
-    <div className="sleep-period-toggle" role="group" aria-label="יום או לילה">
-      <button
-        type="button"
-        className={`sleep-period-btn ${value === SLEEP_PERIOD_DAY ? 'selected' : ''}`}
-        onClick={() => onChange(SLEEP_PERIOD_DAY)}
-        disabled={disabled}
-        aria-pressed={value === SLEEP_PERIOD_DAY}
-      >
-        ☀️ יום
-      </button>
-      <button
-        type="button"
-        className={`sleep-period-btn ${value === SLEEP_PERIOD_NIGHT ? 'selected' : ''}`}
-        onClick={() => onChange(SLEEP_PERIOD_NIGHT)}
-        disabled={disabled}
-        aria-pressed={value === SLEEP_PERIOD_NIGHT}
-      >
-        🌙 לילה
-      </button>
-    </div>
+    <button
+      type="button"
+      className={`sleep-period-toggle sleep-period-toggle--${isDay ? 'day' : 'night'}`}
+      onClick={() => onChange(next)}
+      disabled={disabled}
+      role="switch"
+      aria-checked={!isDay}
+      aria-label={`${label} — לחצי להחלפה`}
+      title={`${label} — לחצי להחלפה`}
+    >
+      <span className="sleep-period-knob" aria-hidden="true" />
+      <span className="sleep-period-opt sleep-period-opt-day" aria-hidden="true">☀️</span>
+      <span className="sleep-period-opt sleep-period-opt-night" aria-hidden="true">🌙</span>
+    </button>
   );
 }
 
@@ -56,7 +58,10 @@ export default function SleepPill({
 }) {
   const [busy, setBusy] = useState(false);
   const nowMs = now instanceof Date ? now.getTime() : (typeof now === 'number' ? now : 0);
-  const [period, setPeriod] = useState(() => inferDefaultPeriod(nowMs || Date.now()));
+  // Only remember an explicit tap. Otherwise the toggle follows the clock, so a
+  // session opened at bedtime can't inherit a stale "day" from the morning —
+  // this app stays mounted all day.
+  const [periodOverride, setPeriodOverride] = useState(null);
 
   const active = getActiveSleep(sleepEntries);
   const awakeMs = active ? null : awakeSinceMs(sleepEntries, nowMs);
@@ -74,6 +79,14 @@ export default function SleepPill({
   const usingPickerTime = Math.abs(pickerMs - nowMs) > 60_000;
   const effectiveDate = usingPickerTime ? new Date(pickerMs) : new Date(nowMs);
 
+  // Which kind of sleep this is — a day nap or the night sleep. Awake it applies
+  // to the sleep about to start; asleep it can still be corrected (a nap that
+  // turned into the night) and is written when התעוררה is pressed. Either way
+  // it's a pending choice that saves nothing on its own.
+  const period = periodOverride
+    ?? (active ? getSleepPeriod(active) : null)
+    ?? inferDefaultPeriod(effectiveDate.getTime());
+
   const handleStart = async () => {
     if (busy || active) return;
     setBusy(true);
@@ -87,6 +100,7 @@ export default function SleepPill({
         endTime: null,
         period,
       });
+      setPeriodOverride(null);
     } finally {
       setBusy(false);
     }
@@ -101,11 +115,13 @@ export default function SleepPill({
       // never write a negative-duration sleep.
       const activeStartMs = new Date(active.startTime).getTime();
       const endMs = effectiveDate.getTime() > activeStartMs ? effectiveDate.getTime() : nowMs;
-      await onEndSleep(active.id, { endTime: new Date(endMs).toISOString() });
-      // After night ends, the next sleep is usually a day nap.
-      if (getSleepPeriod(active) === SLEEP_PERIOD_NIGHT) {
-        setPeriod(SLEEP_PERIOD_DAY);
-      }
+      await onEndSleep(active.id, {
+        endTime: new Date(endMs).toISOString(),
+        // Re-saved so flipping the toggle mid-sleep sticks. The graph derives
+        // day boundaries from this tag, so it's the only thing it needs.
+        period,
+      });
+      setPeriodOverride(null);
     } finally {
       setBusy(false);
     }
@@ -114,7 +130,6 @@ export default function SleepPill({
   if (active) {
     const activeStartMs = new Date(active.startTime).getTime();
     const pickerInvalidForEnd = usingPickerTime && effectiveDate.getTime() <= activeStartMs;
-    const activePeriod = getSleepPeriod(active);
     const wakeLabel = busy
       ? 'שומר...'
       : usingPickerTime && !pickerInvalidForEnd
@@ -126,20 +141,22 @@ export default function SleepPill({
           <div className="sleep-pill-asleep-text">
             <span className="sleep-pill-icon sleep-pill-icon-pulse">💤</span>
             <span>ישנה · {formatDurationLongHM(asleepMs)}</span>
-            <span className={`sleep-period-badge sleep-period-badge--${activePeriod}`}>
-              {periodLabelHe(activePeriod)}
-            </span>
           </div>
-          <button
-            type="button"
-            className="sleep-pill-wake-btn"
-            onClick={handleEnd}
-            disabled={busy}
-          >
-            {wakeLabel}
-          </button>
+          <div className="sleep-pill-actions">
+            <PeriodToggle value={period} onChange={setPeriodOverride} disabled={busy} mode="active" />
+            <button
+              type="button"
+              className="sleep-pill-wake-btn"
+              onClick={handleEnd}
+              disabled={busy}
+            >
+              {wakeLabel}
+            </button>
+          </div>
         </div>
-        <div className="sleep-pill-asleep-sub">נרדמה ב-{fmtTime(active.startTime)}</div>
+        <div className="sleep-pill-asleep-sub">
+          נרדמה ב-{fmtTime(active.startTime)}
+        </div>
       </div>
     );
   }
@@ -163,8 +180,8 @@ export default function SleepPill({
         <span className="sleep-pill-icon">👶</span>
         <span>{awakeLabel}</span>
       </div>
-      <div className="sleep-pill-awake-actions">
-        <PeriodToggle value={period} onChange={setPeriod} disabled={busy} />
+      <div className="sleep-pill-actions">
+        <PeriodToggle value={period} onChange={setPeriodOverride} disabled={busy} mode="sleep" />
         <button
           type="button"
           className="sleep-pill-sleep-btn"

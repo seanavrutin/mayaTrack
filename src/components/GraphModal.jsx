@@ -4,6 +4,7 @@ import {
   computeSleepDayWindows,
   computeSleepDayRow,
   SLEEP_PERIOD_DAY,
+  SLEEP_PERIOD_NIGHT,
 } from '../utils/sleep';
 
 const BAR_SPACE = 55;
@@ -214,6 +215,17 @@ function SleepActogramChart({ row, nowMs }) {
   }
   transitions.sort((a, b) => a.frac - b.frac);
 
+  // The two wakes that bracket this sleep-day. They're window boundaries rather
+  // than segment edges, so they need their own labels. Only shown when the edge
+  // is a real wake — otherwise it's just the midnight fallback.
+  const wakeMarkers = [];
+  if (row.startsAtWake) {
+    wakeMarkers.push({ ms: row.startMs, frac: 0, kind: 'wake-open' });
+  }
+  if (row.endsAtWake) {
+    wakeMarkers.push({ ms: row.endMs, frac: 1, kind: 'wake-close' });
+  }
+
   // Force-space labels so close-together transitions don't render on top
   // of each other. We track the real Y separately so we can draw a small
   // leader line from the drifted label back to its true position.
@@ -260,6 +272,11 @@ function SleepActogramChart({ row, nowMs }) {
         <linearGradient id="grad-sleep-day-v" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#64b5f6" stopOpacity={0.92} />
           <stop offset="100%" stopColor="#42a5f5" stopOpacity={0.92} />
+        </linearGradient>
+        {/* Never marked day or night — shown neutral rather than assumed */}
+        <linearGradient id="grad-sleep-unmarked-v" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#b0a8bf" stopOpacity={0.85} />
+          <stop offset="100%" stopColor="#968da8" stopOpacity={0.85} />
         </linearGradient>
       </defs>
 
@@ -308,8 +325,14 @@ function SleepActogramChart({ row, nowMs }) {
         const showZzz = segH >= 50;
         const delayClass = ['zzz-d1', 'zzz-d2', 'zzz-d3'][j % 3];
         const delayClass2 = ['zzz-d1', 'zzz-d2', 'zzz-d3'][(j + 2) % 3];
-        const isDayNap = seg.period === SLEEP_PERIOD_DAY;
-        const fill = isDayNap ? 'url(#grad-sleep-day-v)' : 'url(#grad-sleep-night-v)';
+        const periodLabel = seg.period === SLEEP_PERIOD_DAY
+          ? 'יום'
+          : seg.period === SLEEP_PERIOD_NIGHT ? 'לילה' : 'לא סומן';
+        const fill = seg.period === SLEEP_PERIOD_DAY
+          ? 'url(#grad-sleep-day-v)'
+          : seg.period === SLEEP_PERIOD_NIGHT
+            ? 'url(#grad-sleep-night-v)'
+            : 'url(#grad-sleep-unmarked-v)';
         return (
           <g key={`seg-${j}`}>
             <rect
@@ -322,7 +345,7 @@ function SleepActogramChart({ row, nowMs }) {
               className={seg.isOpen ? 'sleep-actogram-seg open' : 'sleep-actogram-seg'}
             >
               <title>
-                {`${isDayNap ? 'יום' : 'לילה'} · ${fmtTime(seg.startMs)} → ${fmtTime(seg.endMs)} · ${formatDurationHM(seg.minutes)}`}
+                {`${periodLabel} · ${fmtTime(seg.startMs)} → ${fmtTime(seg.endMs)} · ${formatDurationHM(seg.minutes)}`}
               </title>
             </rect>
 
@@ -448,6 +471,39 @@ function SleepActogramChart({ row, nowMs }) {
         </g>
       ))}
 
+      {/* The wakes that open and close this sleep-day */}
+      {wakeMarkers.map((marker) => {
+        const y = HEADER_H + marker.frac * HOURS_H;
+        const isOpen = marker.kind === 'wake-open';
+        return (
+          <g key={marker.kind} pointerEvents="none">
+            <line
+              x1={TIME_AXIS_W - 6}
+              y1={y}
+              x2={TIME_AXIS_W + DAY_W + 4}
+              y2={y}
+              className="sleep-actogram-wake-line"
+            />
+            <text
+              x={TIME_AXIS_W - 10}
+              y={isOpen ? y + 12 : y - 5}
+              textAnchor="end"
+              className="sleep-day-time wake"
+            >
+              {fmtTime(marker.ms)}
+            </text>
+            <text
+              x={TIME_AXIS_W + DAY_W}
+              y={isOpen ? y + 13 : y - 5}
+              textAnchor="end"
+              className="sleep-day-wake-label"
+            >
+              {isOpen ? '☀️ התעוררה' : '☀️ התעוררה למחרת'}
+            </text>
+          </g>
+        );
+      })}
+
       {/* "Now" indicator on the current sleep-day */}
       {isCurrent && (() => {
         const nowFrac = (nowMs - row.startMs) / row.durationMs;
@@ -498,7 +554,15 @@ export default function GraphView({
   // `title` is still returned by the memo for parity with other consumers
   // (and to keep this file self-documenting), but the parent modal renders
   // the header now, so we don't pull it out here.
-  const { data, summary, actogramNowMs, actogramDayLabel, actogramDayTotal, actogramWindowCount } = useMemo(() => {
+  const {
+    data,
+    summary,
+    actogramNowMs,
+    actogramDayLabel,
+    actogramDayRange,
+    actogramDayTotal,
+    actogramWindowCount,
+  } = useMemo(() => {
     switch (type) {
       case 'pee': {
         const d = computePeeData(diaperEntries);
@@ -590,8 +654,21 @@ export default function GraphView({
         }
 
         const fmtDate = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const fmtClock = (ms) => {
+          const d = new Date(ms);
+          return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        };
         const labelDate = day.labelDate instanceof Date ? day.labelDate : new Date(day.startMs);
         const dayLabel = `יום ${WEEKDAYS_HE[labelDate.getDay()]}׳ ${fmtDate(labelDate)}`;
+        // Spell out the span so the day's boundaries are verifiable even while
+        // the chart is scrolled away from its edges. An unmarked edge is just
+        // midnight, so it's labelled as such instead of claiming a wake.
+        const openLabel = day.startsAtWake
+          ? `☀️ יקיצה ${fmtClock(day.startMs)}`
+          : `${fmtClock(day.startMs)} (ללא יקיצת בוקר)`;
+        const dayRange = day.isCurrent
+          ? `${openLabel} · עד עכשיו`
+          : `${openLabel} → ${fmtClock(day.endMs)}${day.endsAtWake ? ' למחרת' : ''}`;
 
         const numSessions = day.segments.length;
         const longestMin = numSessions > 0
@@ -606,6 +683,7 @@ export default function GraphView({
           ];
           if (day.dayMinutes > 0) parts.push(`יום ${formatDurationHM(day.dayMinutes)}`);
           if (day.nightMinutes > 0) parts.push(`לילה ${formatDurationHM(day.nightMinutes)}`);
+          if (day.unmarkedMinutes > 0) parts.push(`לא סומן ${formatDurationHM(day.unmarkedMinutes)}`);
           if (numSessions > 1) {
             parts.push(`הארוך ${formatDurationHM(longestMin)}`);
           }
@@ -618,6 +696,7 @@ export default function GraphView({
           summary,
           actogramNowMs: nowMs,
           actogramDayLabel: dayLabel,
+          actogramDayRange: dayRange,
           actogramDayTotal: numSessions > 0 ? formatDurationHM(day.totalMinutes) : null,
           actogramWindowCount: windows.length,
         };
@@ -632,13 +711,15 @@ export default function GraphView({
     if (!el) return;
     requestAnimationFrame(() => {
       if (type === 'sleep' && data[0]) {
-        // Scroll so "now" (current sleep-day) or the middle of the strip is visible.
         const row = data[0];
-        const hoursSpan = Math.max(row.durationMs / 3_600_000, 1);
-        const hoursH = hoursSpan * SLEEP_HOUR_H;
-        const nowFrac = row.isCurrent
-          ? Math.min(1, Math.max(0, (nowMs - row.startMs) / row.durationMs))
-          : 0.35;
+        // A finished day reads from its opening wake, so start at the top.
+        if (!row.isCurrent) {
+          el.scrollTop = 0;
+          return;
+        }
+        // On today, centre "now" but never hide the opening wake above it.
+        const hoursH = Math.max(row.durationMs / 3_600_000, 1) * SLEEP_HOUR_H;
+        const nowFrac = Math.min(1, Math.max(0, (nowMs - row.startMs) / row.durationMs));
         const target = SLEEP_HEADER_H + nowFrac * hoursH - el.clientHeight / 2;
         el.scrollTop = Math.max(0, target);
       } else {
@@ -771,6 +852,9 @@ export default function GraphView({
           </button>
           <div className="actogram-nav-info">
             <span className="actogram-nav-range">{actogramDayLabel}</span>
+            {actogramDayRange && (
+              <span className="actogram-nav-span">{actogramDayRange}</span>
+            )}
             {actogramDayTotal && (
               <span className="actogram-nav-total">
                 <span className="actogram-nav-total-label">סה״כ שינה</span>

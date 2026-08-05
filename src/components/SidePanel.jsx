@@ -1,7 +1,13 @@
 import { useRef, useState } from 'react';
 import { logOut } from '../services/firebase';
 import GraphView from './GraphModal';
-import { formatDurationHM, getSleepPeriod, periodLabelHe, SLEEP_PERIOD_DAY } from '../utils/sleep';
+import {
+  formatDurationHM,
+  getSleepPeriod,
+  periodLabelHe,
+  SLEEP_PERIOD_DAY,
+  SLEEP_PERIOD_NIGHT,
+} from '../utils/sleep';
 import { PeriodToggle } from './SleepPill';
 
 function fmt(isoString) {
@@ -170,6 +176,7 @@ function SleepTable({ entries, onDelete, onEdit }) {
         {entries.map((e) => {
           const isOpen = !e.endTime;
           const period = getSleepPeriod(e);
+          const periodIcon = period === SLEEP_PERIOD_DAY ? '☀️' : period === SLEEP_PERIOD_NIGHT ? '🌙' : '·';
           const durationMs = isOpen
             ? 0
             : new Date(e.endTime).getTime() - new Date(e.startTime).getTime();
@@ -177,8 +184,8 @@ function SleepTable({ entries, onDelete, onEdit }) {
             <tr key={e.id}>
               <td className="cell-date">{fmtDate(e.startTime)}</td>
               <td>
-                <span className={`sleep-period-badge sleep-period-badge--${period}`}>
-                  {period === SLEEP_PERIOD_DAY ? '☀️' : '🌙'} {periodLabelHe(period)}
+                <span className={`sleep-period-badge sleep-period-badge--${period ?? 'unmarked'}`}>
+                  {periodIcon} {periodLabelHe(period)}
                 </span>
               </td>
               <td className="cell-time">{fmt(e.startTime)}</td>
@@ -429,7 +436,7 @@ export default function SidePanel({
     setEditingSleep(entry);
     setEditSleepStart(toLocalDateTimeInput(entry.startTime));
     setEditSleepEnd(toLocalDateTimeInput(entry.endTime));
-    setEditSleepPeriod(getSleepPeriod(entry));
+    setEditSleepPeriod(getSleepPeriod(entry) ?? SLEEP_PERIOD_NIGHT);
     setEditSleepError(null);
   };
 
@@ -556,6 +563,7 @@ export default function SidePanel({
                   value={editSleepPeriod}
                   onChange={setEditSleepPeriod}
                   disabled={editSleepBusy}
+                  mode="sleep"
                 />
               </div>
               <div className="sleep-edit-field">

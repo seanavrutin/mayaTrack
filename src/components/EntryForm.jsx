@@ -2,7 +2,13 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import NumberStepper from './NumberStepper';
 import TimeInput from './TimeInput';
 import SleepPill, { PeriodToggle } from './SleepPill';
-import { getActiveSleep, getSleepPeriod, inferDefaultPeriod, SLEEP_PERIOD_DAY } from '../utils/sleep';
+import {
+  getActiveSleep,
+  getSleepPeriod,
+  inferDefaultPeriod,
+  SLEEP_PERIOD_DAY,
+  SLEEP_PERIOD_NIGHT,
+} from '../utils/sleep';
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -571,7 +577,7 @@ export default function EntryForm({
       setActiveBreast(lastBreastSide === 'right' ? 'left' : 'right');
     }
     if (key === 'sleep') {
-      if (activeSleep) setEditSleepPeriod(getSleepPeriod(activeSleep));
+      if (activeSleep) setEditSleepPeriod(getSleepPeriod(activeSleep) ?? SLEEP_PERIOD_NIGHT);
       else setManualSleepPeriod(inferDefaultPeriod(Date.now()));
     }
     setOpenSection(key);
@@ -938,7 +944,10 @@ export default function EntryForm({
                   כרגע מסומנת כישנה (התחילה ב-{new Date(activeSleep.startTime).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}).
                   אפשר לתקן את שעת ההתחלה, או לסיים בשעה אחרת מ"עכשיו".
                 </p>
-                <PeriodToggle value={editSleepPeriod} onChange={setEditSleepPeriod} />
+                <div className="sleep-period-row">
+                  <span className="sleep-period-row-label">סוג השינה</span>
+                  <PeriodToggle value={editSleepPeriod} onChange={setEditSleepPeriod} mode="sleep" />
+                </div>
                 <div className="bf-manual-times">
                   <div className="bf-manual-field">
                     <label>התחלה חדשה</label>
@@ -973,7 +982,10 @@ export default function EntryForm({
                   להוספת שינה שלא נרשמה בזמן אמת — מלאו שעת התחלה וסיום.
                   אם הסיום לפני ההתחלה, ההתחלה תיחשב אתמול.
                 </p>
-                <PeriodToggle value={manualSleepPeriod} onChange={setManualSleepPeriod} />
+                <div className="sleep-period-row">
+                  <span className="sleep-period-row-label">סוג השינה</span>
+                  <PeriodToggle value={manualSleepPeriod} onChange={setManualSleepPeriod} mode="sleep" />
+                </div>
                 <div className="bf-manual-times">
                   <div className="bf-manual-field">
                     <label>התחלה</label>

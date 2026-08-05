@@ -1,15 +1,23 @@
 // Helpers shared by SleepPill, Summary, SidePanel, and GraphModal.
 // Data model: one Firestore doc per sleep session; endTime=null = in progress.
-// Optional `period: 'day' | 'night'` tags naps vs overnight sleep. A "sleep day"
-// is wake-after-night → next wake-after-night (daytime + its night).
-// Legacy docs without `period` still work: period is inferred, and graph day
-// boundaries ignore short overnight fragments so old data does not shatter.
+//
+// Day vs night comes from the user and nothing else: `period: 'day' | 'night'`,
+// set from the sun/moon toggle. Nothing is inferred from clock hours or
+// durations, and a session with no `period` is simply unmarked.
+//
+// Day boundaries are then derived from those tags rather than asked for
+// separately: the night is over at the end of the last night sleep before the
+// first day nap. A date with no such transition falls back to the calendar day,
+// because guessing a wake time would be inventing user input.
 
 export const SLEEP_PERIOD_DAY = 'day';
 export const SLEEP_PERIOD_NIGHT = 'night';
 
-/** Min duration for a legacy (untagged) session to close a sleep-day window. */
-const LEGACY_NIGHT_BOUNDARY_MS = 3 * 3_600_000;
+// Only used to pre-position the toggle before the user commits; never to
+// classify anything already stored.
+const EVENING_START_H = 18;
+const MORNING_START_H = 5;
+const MAX_SLEEP_DAYS = 400;
 
 export function getActiveSleep(sleepEntries) {
   if (!Array.isArray(sleepEntries)) return null;
@@ -88,139 +96,119 @@ export function sleepInWindow(sleepEntries, nowMs, windowMs) {
 }
 
 /**
- * Resolve day/night for an entry.
- * Explicit `period` always wins. Legacy docs without it are inferred from
- * duration (long → night) then start hour — never throws / never requires migration.
+ * The user's day/night marking for a session, or null when it was never
+ * marked. Deliberately never guesses — an unmarked session stays unmarked
+ * until someone sets it via the toggle or the table editor.
  */
-export function getSleepPeriod(entry, nowMs = Date.now()) {
-  if (entry?.period === SLEEP_PERIOD_DAY || entry?.period === SLEEP_PERIOD_NIGHT) {
-    return entry.period;
-  }
-  if (!entry?.startTime) return SLEEP_PERIOD_NIGHT;
-  const duration = sleepDurationMs(entry, nowMs);
-  // Long sessions are overnight even if started mid-afternoon.
-  if (duration >= LEGACY_NIGHT_BOUNDARY_MS) return SLEEP_PERIOD_NIGHT;
-  const h = new Date(entry.startTime).getHours();
-  if (h >= 17 || h < 8) return SLEEP_PERIOD_NIGHT;
-  return SLEEP_PERIOD_DAY;
+export function getSleepPeriod(entry) {
+  if (entry?.period === SLEEP_PERIOD_DAY) return SLEEP_PERIOD_DAY;
+  if (entry?.period === SLEEP_PERIOD_NIGHT) return SLEEP_PERIOD_NIGHT;
+  return null;
 }
 
-/**
- * Whether this completed session should close a sleep-day (wake boundary).
- * Explicit night always counts. Legacy inferred nights only count when long
- * enough, so brief overnight stirs do not split the graph.
- */
-export function isNightSleepBoundary(entry, nowMs = Date.now()) {
-  if (!entry?.startTime || !entry.endTime) return false;
-  if (entry.period === SLEEP_PERIOD_DAY) return false;
-  if (entry.period === SLEEP_PERIOD_NIGHT) return true;
-  // Untagged legacy: only long overnight sleeps define day boundaries.
-  return getSleepPeriod(entry, nowMs) === SLEEP_PERIOD_NIGHT
-    && sleepDurationMs(entry, nowMs) >= LEGACY_NIGHT_BOUNDARY_MS;
-}
-
-/** Sensible default for the day/night toggle from the current clock. */
+/** Where to park the toggle before the user commits. Not a classification. */
 export function inferDefaultPeriod(nowMs) {
   const h = new Date(nowMs).getHours();
-  if (h >= 17 || h < 8) return SLEEP_PERIOD_NIGHT;
+  if (h >= EVENING_START_H || h < MORNING_START_H) return SLEEP_PERIOD_NIGHT;
   return SLEEP_PERIOD_DAY;
 }
 
 export function periodLabelHe(period) {
-  return period === SLEEP_PERIOD_DAY ? 'יום' : 'לילה';
+  if (period === SLEEP_PERIOD_DAY) return 'יום';
+  if (period === SLEEP_PERIOD_NIGHT) return 'לילה';
+  return 'לא סומן';
 }
 
-/** Calendar midnight→midnight windows — fallback when no night boundaries exist. */
-function computeCalendarDayWindows(sleepEntries, nowMs) {
-  const times = [];
-  for (const e of sleepEntries) {
-    if (!e?.startTime) continue;
-    times.push(new Date(e.startTime).getTime());
-    if (e.endTime) times.push(new Date(e.endTime).getTime());
-  }
-  if (!times.length) return [];
+function startOfDay(ms) {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
-  const earliest = Math.min(...times);
-  const latest = Math.max(...times, nowMs);
-
-  const startDay = new Date(earliest);
-  startDay.setHours(0, 0, 0, 0);
-  const endDay = new Date(latest);
-  endDay.setHours(0, 0, 0, 0);
-
-  const windows = [];
-  const cursor = new Date(startDay);
-  while (cursor.getTime() <= endDay.getTime()) {
-    const startMs = cursor.getTime();
-    const next = new Date(cursor);
-    next.setDate(next.getDate() + 1);
-    const endMs = next.getTime();
-    const isCurrent = startMs <= nowMs && nowMs < endMs;
-    windows.push({
-      startMs,
-      endMs: isCurrent ? Math.max(nowMs, startMs + 1) : endMs,
-      labelDate: new Date(startMs),
-      isCurrent,
-      calendarFallback: true,
-    });
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return windows.reverse();
+function dayKey(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
 /**
- * Build sleep-day windows: each spans wake-after-night → next wake-after-night
- * (daytime + its night). Labeled by the calendar date of the starting wake.
- * Returns newest-first. If no night boundaries can be found (common for
- * untagged legacy data), falls back to calendar days so the graph stays usable.
+ * Where each day begins, derived entirely from the 🌙/☀️ tags: the night is over
+ * when a night sleep ends and the next sleep is a day nap (or nothing has
+ * followed yet). One night sleep followed by another is the same night, so
+ * waking at 03:00 and settling back 20 minutes later never starts a day.
+ *
+ * Keyed by the calendar date of the wake, earliest wins — a mistagged evening
+ * nap can then never push a date's start into the night.
+ */
+function dayStartsByDate(sleepEntries) {
+  const sorted = sleepEntries
+    .filter((e) => e?.startTime)
+    .slice()
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+  const dayStarts = new Map();
+  for (let i = 0; i < sorted.length; i++) {
+    const e = sorted[i];
+    if (!e.endTime || getSleepPeriod(e) !== SLEEP_PERIOD_NIGHT) continue;
+    const endMs = new Date(e.endTime).getTime();
+    if (!(endMs > new Date(e.startTime).getTime())) continue;
+
+    const next = sorted[i + 1];
+    if (next && getSleepPeriod(next) !== SLEEP_PERIOD_DAY) continue;
+
+    const key = dayKey(endMs);
+    if (!dayStarts.has(key) || endMs < dayStarts.get(key)) dayStarts.set(key, endMs);
+  }
+  return dayStarts;
+}
+
+/**
+ * Build sleep-day windows — one per calendar date, each running from that day's
+ * wake through the next day's wake, so a day covers the daytime plus its night.
+ * Dates with no night→day transition to derive a wake from fall back to the
+ * calendar day rather than a guessed hour. Anchoring on dates also guarantees
+ * pages stay ~24h and today always has one. Returns newest-first.
  */
 export function computeSleepDayWindows(sleepEntries, nowMs) {
   if (!Array.isArray(sleepEntries) || !sleepEntries.length) return [];
 
-  const nights = sleepEntries
-    .filter((e) => isNightSleepBoundary(e, nowMs))
-    .sort((a, b) => new Date(a.endTime).getTime() - new Date(b.endTime).getTime());
+  const starts = sleepEntries
+    .filter((e) => e?.startTime)
+    .map((e) => new Date(e.startTime).getTime());
+  if (!starts.length) return [];
 
-  if (nights.length === 0) {
-    return computeCalendarDayWindows(sleepEntries, nowMs);
-  }
+  const wakes = dayStartsByDate(sleepEntries);
+  // Midnight is the honest fallback: with no night sleep tagged that morning we
+  // don't know when her day began, so we don't pretend to.
+  const boundaryFor = (dayDate) => wakes.get(dayKey(dayDate.getTime())) ?? dayDate.getTime();
+  const isWake = (dayDate) => wakes.has(dayKey(dayDate.getTime()));
+
+  const firstDay = startOfDay(Math.min(...starts));
+  const lastDay = startOfDay(nowMs);
+  const oldestAllowed = new Date(lastDay);
+  oldestAllowed.setDate(oldestAllowed.getDate() - (MAX_SLEEP_DAYS - 1));
+  const cursor = firstDay.getTime() < oldestAllowed.getTime() ? oldestAllowed : firstDay;
 
   const windows = [];
+  for (const day = new Date(cursor); day.getTime() <= lastDay.getTime(); day.setDate(day.getDate() + 1)) {
+    const startMs = boundaryFor(day);
+    // The day hasn't begun yet — she's still inside the previous day's night.
+    if (nowMs < startMs) continue;
 
-  for (let i = 0; i < nights.length; i++) {
-    const night = nights[i];
-    const endMs = new Date(night.endTime).getTime();
-    let startMs;
-    if (i > 0) {
-      startMs = new Date(nights[i - 1].endTime).getTime();
-    } else {
-      // No prior wake on record — start at the earliest session in this cycle,
-      // capped so we don't pull in ancient history.
-      const nightStart = new Date(night.startTime).getTime();
-      const candidates = sleepEntries
-        .filter((e) => e?.startTime && new Date(e.startTime).getTime() < endMs)
-        .map((e) => new Date(e.startTime).getTime());
-      const earliest = candidates.length ? Math.min(...candidates) : nightStart;
-      startMs = Math.max(earliest, endMs - 36 * 3_600_000, nightStart - 18 * 3_600_000);
-    }
-    if (endMs <= startMs) continue;
+    const nextDay = new Date(day);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const rawEndMs = boundaryFor(nextDay);
+    if (rawEndMs <= startMs) continue;
+
+    const isCurrent = nowMs < rawEndMs;
+    const endMs = isCurrent ? Math.max(nowMs, startMs + 1) : rawEndMs;
     windows.push({
       startMs,
       endMs,
-      labelDate: new Date(startMs),
-      isCurrent: false,
-    });
-  }
-
-  // Ongoing sleep-day after the last night wake.
-  const lastWake = new Date(nights[nights.length - 1].endTime).getTime();
-  if (nowMs >= lastWake) {
-    windows.push({
-      startMs: lastWake,
-      endMs: Math.max(nowMs, lastWake + 1),
-      labelDate: new Date(lastWake),
-      isCurrent: true,
+      labelDate: new Date(day),
+      isCurrent,
+      // Lets the chart distinguish a real wake from the midnight fallback.
+      startsAtWake: isWake(day),
+      endsAtWake: !isCurrent && isWake(nextDay),
     });
   }
 
@@ -238,6 +226,7 @@ export function computeSleepDayRow(sleepEntries, window, nowMs) {
   let totalMinutes = 0;
   let dayMinutes = 0;
   let nightMinutes = 0;
+  let unmarkedMinutes = 0;
 
   for (const e of sleepEntries) {
     if (!e?.startTime) continue;
@@ -250,10 +239,11 @@ export function computeSleepDayRow(sleepEntries, window, nowMs) {
     if (segEndMs <= segStartMs) continue;
 
     const minutes = Math.round((segEndMs - segStartMs) / 60_000);
-    const period = getSleepPeriod(e, nowMs);
+    const period = getSleepPeriod(e);
     totalMinutes += minutes;
     if (period === SLEEP_PERIOD_DAY) dayMinutes += minutes;
-    else nightMinutes += minutes;
+    else if (period === SLEEP_PERIOD_NIGHT) nightMinutes += minutes;
+    else unmarkedMinutes += minutes;
 
     segments.push({
       startFrac: (segStartMs - window.startMs) / durationMs,
@@ -274,9 +264,12 @@ export function computeSleepDayRow(sleepEntries, window, nowMs) {
     durationMs,
     labelDate: window.labelDate,
     isCurrent: Boolean(window.isCurrent),
+    startsAtWake: Boolean(window.startsAtWake),
+    endsAtWake: Boolean(window.endsAtWake),
     segments,
     totalMinutes,
     dayMinutes,
     nightMinutes,
+    unmarkedMinutes,
   };
 }
