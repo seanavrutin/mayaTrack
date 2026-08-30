@@ -2550,40 +2550,56 @@ input {
   direction: ltr;
 }
 
-.actogram-nav-span {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--primary-dark);
-  opacity: 0.6;
-  direction: rtl;
-  unicode-bidi: plaintext;
-}
-
-.actogram-nav-total {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
+/* Total / night / day durations as one three-cell strip. Stretching to the
+ * full width of the nav's centre column keeps the cells evenly thirded. */
+.actogram-totals {
+  display: flex;
+  align-self: stretch;
+  padding: 3px 2px;
+  border-radius: 12px;
   background: linear-gradient(135deg, var(--primary-light), #f3ecfb);
   color: var(--primary-dark);
   box-shadow: 0 1px 2px rgba(124, 92, 191, 0.08);
-  /* RTL Hebrew label + duration string with digits — `plaintext` keeps
-   * the digits in logical order without flipping them. */
   direction: rtl;
+}
+
+.actogram-total {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 0 4px;
+}
+
+.actogram-total + .actogram-total {
+  border-inline-start: 1px solid rgba(124, 92, 191, 0.2);
+}
+
+.actogram-total-label {
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1.25;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.actogram-total-value {
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  /* Hebrew unit suffixes next to digits — `plaintext` keeps the number
+   * and its unit in logical order instead of flipping them. */
   unicode-bidi: plaintext;
 }
 
-.actogram-nav-total-label {
-  font-size: 0.62rem;
-  font-weight: 600;
-  opacity: 0.7;
-}
-
-.actogram-nav-total-value {
-  font-size: 0.78rem;
+/* The overall total stays the headline number of the three. */
+.actogram-total.main .actogram-total-value {
+  font-size: 0.85rem;
   font-weight: 800;
-  letter-spacing: 0.01em;
 }
 
 .sleep-actogram {
