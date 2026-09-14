@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   getActiveSleep,
+  getLastCompletedSleep,
   awakeSinceMs,
   sleepDurationMs,
   formatDurationLongHM,
@@ -65,6 +66,11 @@ export default function SleepPill({
 
   const active = getActiveSleep(sleepEntries);
   const awakeMs = active ? null : awakeSinceMs(sleepEntries, nowMs);
+  // The wake-up time behind `awakeMs` — the end of the last finished sleep.
+  // Mirrors the "נרדמה ב-" sub-line shown while asleep: the elapsed counter
+  // alone doesn't answer "when did she get up?", which is what gets typed into
+  // the next feeding/nap plan. Null when no completed sleep is on record.
+  const lastWakeIso = active ? null : getLastCompletedSleep(sleepEntries)?.endTime ?? null;
 
   // While asleep, duration ticks live (the parent's useNow drives re-renders).
   const asleepMs = active ? sleepDurationMs(active, nowMs) : 0;
@@ -176,21 +182,28 @@ export default function SleepPill({
       className={`sleep-pill sleep-pill-awake ${awakeOverThreshold ? 'sleep-pill-awake-long' : ''}`}
       role="status"
     >
-      <div className="sleep-pill-awake-text">
-        <span className="sleep-pill-icon">👶</span>
-        <span>{awakeLabel}</span>
+      <div className="sleep-pill-awake-main">
+        <div className="sleep-pill-awake-text">
+          <span className="sleep-pill-icon">👶</span>
+          <span>{awakeLabel}</span>
+        </div>
+        <div className="sleep-pill-actions">
+          <PeriodToggle value={period} onChange={setPeriodOverride} disabled={busy} mode="sleep" />
+          <button
+            type="button"
+            className="sleep-pill-sleep-btn"
+            onClick={handleStart}
+            disabled={busy}
+          >
+            {sleepBtnLabel}
+          </button>
+        </div>
       </div>
-      <div className="sleep-pill-actions">
-        <PeriodToggle value={period} onChange={setPeriodOverride} disabled={busy} mode="sleep" />
-        <button
-          type="button"
-          className="sleep-pill-sleep-btn"
-          onClick={handleStart}
-          disabled={busy}
-        >
-          {sleepBtnLabel}
-        </button>
-      </div>
+      {lastWakeIso && (
+        <div className="sleep-pill-awake-sub">
+          התעוררה ב-{fmtTime(lastWakeIso)}
+        </div>
+      )}
     </div>
   );
 }

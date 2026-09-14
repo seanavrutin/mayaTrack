@@ -1973,7 +1973,16 @@ input {
 .sleep-pill-awake {
   background: var(--card-bg);
   color: var(--text);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.sleep-pill-awake-main {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .sleep-pill-awake-long {
@@ -1987,6 +1996,15 @@ input {
   gap: 8px;
   font-weight: 600;
   font-size: 0.92rem;
+}
+
+/* Matches .sleep-pill-asleep-sub, but inherits its color instead of pinning
+   one: this line also has to read on the orange .sleep-pill-awake-long tint. */
+.sleep-pill-awake-sub {
+  font-size: 0.78rem;
+  color: inherit;
+  opacity: 0.7;
+  margin-right: 28px;
 }
 
 .sleep-pill-sleep-btn {
