@@ -1,0 +1,53 @@
+name: Deploy preview
+
+# Every feature branch gets its own throwaway copy of the app at
+#   https://<owner>.github.io/mayaTrack/preview/<branch-slug>/
+# so a change can be clicked through before it is merged into firebase.
+on:
+  push:
+    branches-ignore: [firebase, main, gh-pages]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Derive branch slug
+        id: slug
+        run: |
+          slug="$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9]#-#g; s#--*#-#g; s#^-##; s#-$##')"
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+
+      # The preview lives under a deeper path, so Vite's base has to match or
+      # every asset URL 404s. PREVIEW_BUILD also strips the service worker —
+      # see the comment in vite.config.js.
+      - name: Build
+        env:
+          PREVIEW_BUILD: '1'
+        run: npm run build -- --base=/mayaTrack/preview/${{ steps.slug.outputs.slug }}/
+
+      - name: Publish to gh-pages preview folder
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_MESSAGE: "Preview ${{ github.ref_name }} (${{ github.sha }})"
+        run: .github/scripts/publish-pages.sh "preview/${{ steps.slug.outputs.slug }}"
+
+      - name: Summary
+        run: |
+          echo "🔍 Preview: https://${{ github.repository_owner }}.github.io/mayaTrack/preview/${{ steps.slug.outputs.slug }}/" >> "$GITHUB_STEP_SUMMARY"
