@@ -1,0 +1,38 @@
+name: Clean up preview
+
+# Deleting a branch removes its preview folder, so gh-pages doesn't accumulate
+# dead builds forever.
+on:
+  delete
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove preview folder
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DELETED_REF: ${{ github.event.ref }}
+        run: |
+          set -euo pipefail
+          slug="$(echo "$DELETED_REF" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9]#-#g; s#--*#-#g; s#^-##; s#-$##')"
+          work="$(mktemp -d)"
+          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone --depth 1 --branch gh-pages "$url" "$work" 2>/dev/null || exit 0
+          [ -d "$work/preview/$slug" ] || { echo "No preview for $slug."; exit 0; }
+          rm -rf "$work/preview/$slug"
+          cd "$work"
+          git add -A
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -q -m "Remove preview for $DELETED_REF"
+          git push -q origin gh-pages
+          echo "Removed preview/$slug"

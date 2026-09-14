@@ -6,20 +6,18 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
+# Shared with deploy-preview.yml — both jobs push to gh-pages, so they must
+# never run at the same time. Queue rather than cancel: a skipped production
+# deploy would leave the live site stale.
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: gh-pages
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,11 +29,11 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - uses: actions/configure-pages@v5
+      - name: Publish to gh-pages root
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_MESSAGE: "Deploy ${{ github.sha }}"
+        run: .github/scripts/publish-pages.sh
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Summary
+        run: echo "🚀 https://${{ github.repository_owner }}.github.io/mayaTrack/" >> "$GITHUB_STEP_SUMMARY"
