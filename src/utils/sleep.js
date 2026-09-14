@@ -34,6 +34,53 @@ export function getActiveSleep(sleepEntries) {
   return best;
 }
 
+// Two records can't both be true — she is only ever asleep once. Overlapping
+// sessions are therefore bad data (two phones tapping נרדמה, a double tap, a
+// mistyped edit), and the totals that add them up are wrong by the overlap.
+// Nothing here rewrites those totals: the app says the data is broken and
+// points at the records, because only the person who was there knows which one
+// is real.
+//
+// A minute of slack keeps a touching pair (one sleep ending as the edited next
+// one starts) from reading as a conflict.
+export const SLEEP_OVERLAP_TOLERANCE_MS = 60_000;
+
+/**
+ * Overlapping sleep records, as pairs plus the set of ids involved.
+ * An open session counts as running until `nowMs`, so two open sessions always
+ * conflict — which is exactly the state that produces a duplicate night.
+ */
+export function findSleepOverlaps(sleepEntries, nowMs) {
+  const empty = { pairs: [], ids: new Set() };
+  if (!Array.isArray(sleepEntries) || sleepEntries.length < 2) return empty;
+
+  const spans = sleepEntries
+    .filter((e) => e?.startTime)
+    .map((e) => ({
+      entry: e,
+      start: new Date(e.startTime).getTime(),
+      end: e.endTime ? new Date(e.endTime).getTime() : nowMs,
+    }))
+    .filter((x) => Number.isFinite(x.start) && Number.isFinite(x.end) && x.end > x.start)
+    .sort((a, b) => a.start - b.start);
+
+  const pairs = [];
+  const ids = new Set();
+  for (let i = 0; i < spans.length; i++) {
+    // Sorted by start, so we only have to look forward until a session starts
+    // after this one ends — everything past that starts later still.
+    for (let j = i + 1; j < spans.length; j++) {
+      if (spans[j].start >= spans[i].end) break;
+      const overlapMs = Math.min(spans[i].end, spans[j].end) - spans[j].start;
+      if (overlapMs <= SLEEP_OVERLAP_TOLERANCE_MS) continue;
+      pairs.push({ a: spans[i].entry, b: spans[j].entry, overlapMs });
+      ids.add(spans[i].entry.id);
+      ids.add(spans[j].entry.id);
+    }
+  }
+  return { pairs, ids };
+}
+
 export function getLastCompletedSleep(sleepEntries) {
   if (!Array.isArray(sleepEntries)) return null;
   let best = null;
@@ -258,11 +305,20 @@ export function computeSleepDayRow(sleepEntries, window, nowMs) {
 
   segments.sort((a, b) => a.startFrac - b.startFrac);
 
+  // Overlapping bands inside this window mean the totals below double-count
+  // those minutes. The chart flags it rather than quietly fixing the number.
+  let overlapMinutes = 0;
+  for (let i = 1; i < segments.length; i++) {
+    const gapMs = segments[i].startMs - segments[i - 1].endMs;
+    if (gapMs < -SLEEP_OVERLAP_TOLERANCE_MS) overlapMinutes += Math.round(-gapMs / 60_000);
+  }
+
   return {
     startMs: window.startMs,
     endMs: window.endMs,
     durationMs,
     labelDate: window.labelDate,
+    overlapMinutes,
     isCurrent: Boolean(window.isCurrent),
     startsAtWake: Boolean(window.startsAtWake),
     endsAtWake: Boolean(window.endsAtWake),

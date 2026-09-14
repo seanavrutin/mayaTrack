@@ -220,6 +220,15 @@ Rules that follow from this, which have all been bug fixes at some point:
 `Summary`, and `GraphModal` all read from it.
 
 - One doc per session; `endTime: null` means in progress.
+- **Overlapping sessions are bad data, and the app says so instead of fixing
+  it.** She is only ever asleep once, so two records covering the same minutes
+  are one sleep recorded twice — a real pair (two phones tapping נרדמה at the
+  same bedtime) once made a night read 11.9h against 9.2h actually slept.
+  `findSleepOverlaps` flags them and `DataIssuesBanner`, the sleep table rows
+  and the actogram header all show the warning; the totals still add the raw
+  minutes. Do not make the math quietly union them: only the person who was
+  there knows which record is the real one, and a silently corrected number
+  hides an entry problem that will keep happening.
 - **Day vs night is user input only** (`period: 'day' | 'night'`, set by the
   ☀️/🌙 toggle). Nothing is ever inferred from clock hours or duration.
   `inferDefaultPeriod` only *pre-positions the toggle*; it never classifies

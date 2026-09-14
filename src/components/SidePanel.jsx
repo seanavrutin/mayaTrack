@@ -158,7 +158,7 @@ function PumpingTable({ entries, onDelete }) {
   );
 }
 
-function SleepTable({ entries, onDelete, onEdit }) {
+function SleepTable({ entries, conflictIds, onDelete, onEdit }) {
   if (entries.length === 0) return <p className="no-data">אין נתונים עדיין</p>;
   return (
     <table className="data-table">
@@ -180,9 +180,17 @@ function SleepTable({ entries, onDelete, onEdit }) {
           const durationMs = isOpen
             ? 0
             : new Date(e.endTime).getTime() - new Date(e.startTime).getTime();
+          // A row that overlaps another one: both are marked, since the app
+          // can't know which of the two is the real sleep.
+          const conflicted = conflictIds?.has(e.id);
           return (
-            <tr key={e.id}>
-              <td className="cell-date">{fmtDate(e.startTime)}</td>
+            <tr key={e.id} className={conflicted ? 'row-conflict' : ''}>
+              <td className="cell-date">
+                {conflicted && (
+                  <span className="row-conflict-icon" title="חופף לרשומה אחרת — מחקי את הכפילות">⚠</span>
+                )}
+                {fmtDate(e.startTime)}
+              </td>
               <td>
                 <span className={`sleep-period-badge sleep-period-badge--${period ?? 'unmarked'}`}>
                   {periodIcon} {periodLabelHe(period)}
@@ -246,6 +254,7 @@ function DetailModal({
   diaperEntries,
   pumpingEntries,
   sleepEntries,
+  sleepConflictIds,
   medicationLogs,
   onDeleteFeeding,
   onDeleteDiaper,
@@ -329,7 +338,14 @@ function DetailModal({
       tableContent = <PumpingTable entries={pumpingEntries} onDelete={onDeletePumping} />;
       break;
     case 'sleep':
-      tableContent = <SleepTable entries={sleepEntries} onDelete={onDeleteSleep} onEdit={onEditSleep} />;
+      tableContent = (
+        <SleepTable
+          entries={sleepEntries}
+          conflictIds={sleepConflictIds}
+          onDelete={onDeleteSleep}
+          onEdit={onEditSleep}
+        />
+      );
       break;
     case 'medications':
       tableContent = <MedicationTable entries={medicationLogs} onDelete={onDeleteMedicationLog} />;
@@ -409,6 +425,9 @@ export default function SidePanel({
   diaperEntries,
   pumpingEntries,
   sleepEntries = [],
+  activeItemId = null,
+  setActiveItemId = () => {},
+  sleepConflictIds,
   medicationLogs = [],
   onDeleteFeeding,
   onDeleteDiaper,
@@ -420,7 +439,8 @@ export default function SidePanel({
   activeKid,
   onOpenSettings,
 }) {
-  const [activeItemId, setActiveItemId] = useState(null);
+  // The open item is owned by App so the data-issues banner can send the user
+  // straight to the sleep table in one tap, instead of just opening the panel.
   const activeItem = PANEL_ITEMS.find((i) => i.id === activeItemId) || null;
 
   // Sleep edit modal state lives at this level so it layers above the detail
@@ -537,6 +557,7 @@ export default function SidePanel({
           diaperEntries={diaperEntries}
           pumpingEntries={pumpingEntries}
           sleepEntries={sleepEntries}
+          sleepConflictIds={sleepConflictIds}
           medicationLogs={medicationLogs}
           onDeleteFeeding={onDeleteFeeding}
           onDeleteDiaper={onDeleteDiaper}

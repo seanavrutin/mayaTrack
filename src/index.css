@@ -2257,6 +2257,106 @@ input {
   border-color: var(--text-muted);
 }
 
+/* ── Data issues banner (records that contradict each other) ── */
+
+/* Amber, not the red of a failed save: nothing is lost here, but a number on
+   screen is wrong until someone decides which record is the real one. */
+.data-issues-banner {
+  position: sticky;
+  top: 0;
+  z-index: 24;
+  background: #fff6e5;
+  color: #8a5300;
+  border-bottom: 1px solid rgba(138, 83, 0, 0.18);
+  padding: 8px 14px 10px;
+  animation: sync-banner-slide 0.25s ease-out;
+}
+
+.data-issues-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.data-issues-icon {
+  display: inline-block;
+  font-weight: 700;
+}
+
+.data-issues-dismiss {
+  margin-inline-start: auto;
+  background: transparent;
+  color: inherit;
+  border: none;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.data-issues-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.data-issues-item {
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.data-issues-more {
+  background: transparent;
+  padding-block: 0;
+  opacity: 0.8;
+}
+
+.data-issues-action {
+  margin-top: 8px;
+  background: #8a5300;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.data-issues-action:hover {
+  background: #6d4200;
+}
+
+/* The same warning where the records themselves are: the table row you delete,
+   and the day whose totals are inflated by it. */
+.data-table tr.row-conflict {
+  background: #fff6e5;
+}
+
+.row-conflict-icon {
+  color: #8a5300;
+  font-weight: 700;
+  margin-inline-end: 4px;
+}
+
+.actogram-warning {
+  background: #fff6e5;
+  color: #8a5300;
+  border-radius: 8px;
+  padding: 3px 8px;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 /* ── Failed writes banner (records that couldn't be saved) ── */
 
 .failed-writes-banner {

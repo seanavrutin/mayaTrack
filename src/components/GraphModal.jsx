@@ -587,6 +587,7 @@ export default function GraphView({
     summary,
     actogramNowMs,
     actogramDayLabel,
+    actogramOverlapMinutes,
     actogramDayTotal,
     actogramNightTotal,
     actogramDaytimeTotal,
@@ -693,6 +694,9 @@ export default function GraphView({
           summary: '',
           actogramNowMs: nowMs,
           actogramDayLabel: dayLabel,
+          // The totals below double-count overlapping records, so say so rather
+          // than printing a number that looks fine.
+          actogramOverlapMinutes: day.overlapMinutes || 0,
           actogramDayTotal: hasSleep ? formatHoursDecimal(day.totalMinutes) : null,
           actogramNightTotal: hasSleep ? formatHoursDecimal(day.nightMinutes) : null,
           actogramDaytimeTotal: hasSleep ? formatHoursDecimal(day.dayMinutes) : null,
@@ -850,6 +854,11 @@ export default function GraphView({
           </button>
           <div className="actogram-nav-info">
             <span className="actogram-nav-range">{actogramDayLabel}</span>
+            {actogramOverlapMinutes > 0 && (
+              <div className="actogram-warning" role="alert" title="שתי רשומות שינה חופפות ביום הזה — הסכומים סופרים את הדקות האלה פעמיים">
+                ⚠ רשומות חופפות · הסכומים סופרים {actogramOverlapMinutes} דק׳ פעמיים
+              </div>
+            )}
             {actogramDayTotal && (
               <div className="actogram-totals">
                 <div className="actogram-total" title="סה״כ שינת יום">

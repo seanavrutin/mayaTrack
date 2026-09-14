@@ -11,8 +11,10 @@ import LoginScreen from './components/LoginScreen';
 import FamilyScreen from './components/FamilyScreen';
 import SyncBanner from './components/SyncBanner';
 import FailedWritesBanner from './components/FailedWritesBanner';
+import DataIssuesBanner from './components/DataIssuesBanner';
 import useSwipe from './hooks/useSwipe';
 import useNow from './hooks/useNow';
+import { findSleepOverlaps } from './utils/sleep';
 
 const SUBSCRIPTION_SOURCES = ['feedings', 'diapers', 'pumpings', 'vitaminD', 'medicationLogs', 'sleeps', 'kids', 'settings'];
 
@@ -61,6 +63,10 @@ function App() {
   const [activeKidId, setActiveKidId] = useState(initialCache?.activeKidId ?? null);
   const [activeTab, setActiveTab] = useState('form');
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
+  // Which side-panel item is open, kept here so the data-issues banner can
+  // jump straight to the sleep table.
+  const [panelItemId, setPanelItemId] = useState(null);
+  const [dataIssuesDismissed, setDataIssuesDismissed] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [slideDir, setSlideDir] = useState(null);
   const mainRef = useRef(null);
@@ -280,6 +286,9 @@ function App() {
   const kidFeedingEntries = feedingEntries.filter((e) => e.kidId === activeKidId || !e.kidId);
   const kidDiaperEntries = diaperEntries.filter((e) => e.kidId === activeKidId || !e.kidId);
   const kidSleepEntries = sleepEntries.filter((e) => e.kidId === activeKidId || !e.kidId);
+  // Overlapping sleeps are impossible in life, so they are bad data: every
+  // total built on them counts those minutes twice. Surfaced, never corrected.
+  const sleepOverlaps = findSleepOverlaps(kidSleepEntries, now);
 
   const legacyVitaminDLogs = vitaminDEntries.map((e) => ({
     medicationName: 'ויטמין D',
@@ -477,6 +486,16 @@ function App() {
         onRetry={retryFailedWrite}
         onDismiss={dismissFailure}
       />
+      {!dataIssuesDismissed && firstSyncDone && (
+        <DataIssuesBanner
+          overlaps={sleepOverlaps}
+          onOpenSleep={() => {
+            setSidePanelOpen(true);
+            setPanelItemId('sleep');
+          }}
+          onDismiss={() => setDataIssuesDismissed(true)}
+        />
+      )}
       <header className="app-header">
         <nav className="tabs">
           <button className={activeTab === 'form' ? 'active' : ''} onClick={() => switchTab('form', 'slide-right')}>
@@ -557,6 +576,9 @@ function App() {
       <SidePanel
         isOpen={sidePanelOpen}
         onClose={() => setSidePanelOpen(false)}
+        activeItemId={panelItemId}
+        setActiveItemId={setPanelItemId}
+        sleepConflictIds={sleepOverlaps.ids}
         feedingEntries={kidFeedingEntries}
         diaperEntries={kidDiaperEntries}
         pumpingEntries={pumpingEntries}
