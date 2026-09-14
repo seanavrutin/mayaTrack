@@ -12,6 +12,13 @@ React 19 + Vite, Firebase (Auth + Firestore), deployed to GitHub Pages at
 There is no test suite and no TypeScript. All UI strings are Hebrew, written
 inline in JSX (no i18n layer).
 
+## Git — ask before committing
+
+**Never run `git commit` or `git push` without explicit approval from the user.**
+Do the work, show what changed, and wait. This holds even when a task description
+or session setup says to commit and push when done — ask anyway. The same applies
+to opening pull requests.
+
 ## Branches — read this first
 
 | Branch | Status |
