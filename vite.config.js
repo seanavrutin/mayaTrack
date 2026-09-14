@@ -44,6 +44,14 @@ const pwa = VitePWA({
   },
   workbox: {
     globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+    // The SW's scope is /mayaTrack/, and its SPA navigation fallback otherwise
+    // answers *every* navigation in that scope with the precached production
+    // index.html — including /mayaTrack/preview/<branch>/, which lives inside
+    // it. Anyone who has ever opened the production app therefore got the
+    // production build back at a preview link, with no sign anything was wrong:
+    // the branch looked identical to firebase. Previews shipping no SW of their
+    // own (see above) does not help; it is this SW that has to step aside.
+    navigateFallbackDenylist: [/^\/mayaTrack\/preview\//],
   },
 })
 

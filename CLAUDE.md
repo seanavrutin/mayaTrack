@@ -48,6 +48,13 @@ Things to know about previews:
   so a second SW there would make caching impossible to reason about, and an
   installable "MayaTrack" that is really a feature branch is its own trap.
   Anything PWA- or offline-specific therefore cannot be verified on a preview.
+- **The production SW must keep its `navigateFallbackDenylist`.** Its SPA
+  navigation fallback matches every navigation in `/mayaTrack/`, previews
+  included, and answers with the precached production `index.html` — so a
+  preview link silently served the production build to anyone who had opened
+  the app before. `workbox.navigateFallbackDenylist` in `vite.config.js` excludes
+  `/mayaTrack/preview/`. A browser only picks that up once it has loaded a
+  production deploy carrying it; until then, open previews in a private window.
 - Deleting the branch deletes the preview (`cleanup-preview.yml`).
 - A production deploy never wipes `preview/` — `publish-pages.sh` preserves that
   tree when it replaces the site root.
